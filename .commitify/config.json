@@ -1,5 +1,15 @@
 {
     "initiated": true,
     "branch": "main",
-    "format": "gitmoji"
+    "format": "gitmoji",
+    "language": "en",
+    "scopes": [
+        "Core",
+        "Gateway",
+        "Docker",
+        "Config",
+        "Logging",
+        "CI/CD"
+    ],
+    "author": "BillelAttafi"
 }
