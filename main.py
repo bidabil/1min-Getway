@@ -13,14 +13,10 @@ from src import (
     SUBSET_OF_ONE_MIN_PERMITTED_MODELS
 )
 import requests
-import time
-import uuid
 import json
 import os
-import base64
 import socket
 import printedcolors
-from io import BytesIO
 from waitress import serve
 
 @app.route('/', methods=['GET', 'POST'])
@@ -193,95 +189,6 @@ def generate_images():
     except requests.exceptions.RequestException as e:
         logger.error(f"Image generation failed: {str(e)}")
         return ERROR_HANDLER(1044)  # Handle image generation error
-
-def handle_options_request():
-    response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
-    return response, 204
-
-def transform_response(one_min_response, request_data, prompt_token):
-    completion_token = calculate_token(one_min_response['aiRecord']["aiRecordDetail"]["resultObject"][0])
-    logger.debug(f"Finished processing Non-Streaming response. Completion tokens: {str(completion_token)}")
-    logger.debug(f"Total tokens: {str(completion_token + prompt_token)}")
-    return {
-        "id": f"chatcmpl-{uuid.uuid4()}",
-        "object": "chat.completion",
-        "created": int(time.time()),
-        "model": request_data.get('model', 'mistral-nemo'),
-        "choices": [
-            {
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": one_min_response['aiRecord']["aiRecordDetail"]["resultObject"][0],
-                },
-                "finish_reason": "stop"
-            }
-        ],
-        "usage": {
-            "prompt_tokens": prompt_token,
-            "completion_tokens": completion_token,
-            "total_tokens": prompt_token + completion_token
-        }
-    }
-    
-def set_response_headers(response):
-    response.headers['Content-Type'] = 'application/json'
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['X-Request-ID'] = str (uuid.uuid4())
-
-def stream_response(response, request_data, model, prompt_tokens):
-    all_chunks = ""
-    for chunk in response.iter_content(chunk_size=1024):
-        finish_reason = None
-
-        return_chunk = {
-            "id": f"chatcmpl-{uuid.uuid4()}",
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": request_data.get('model', 'mistral-nemo'),
-            "choices": [
-                {
-                    "index": 0,
-                    "delta": {
-                        "content": chunk.decode('utf-8')
-                    },
-                    "finish_reason": finish_reason
-                }
-            ]
-        }
-        all_chunks += chunk.decode('utf-8')
-        yield f"data: {json.dumps(return_chunk)}\n\n"
-        
-    tokens = calculate_token(all_chunks)
-    logger.debug(f"Finished processing streaming response. Completion tokens: {str(tokens)}")
-    logger.debug(f"Total tokens: {str(tokens + prompt_tokens)}")
-        
-    # Final chunk when iteration stops
-    final_chunk = {
-        "id": f"chatcmpl-{uuid.uuid4()}",
-        "object": "chat.completion.chunk",
-        "created": int(time.time()),
-        "model": request_data.get('model', 'mistral-nemo'),
-        "choices": [
-            {
-                "index": 0,
-                "delta": {
-                    "content": ""    
-                },
-                "finish_reason": "stop"
-            }
-        ],
-        "usage": {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": tokens,
-            "total_tokens": tokens + prompt_tokens
-        }
-    }
-    yield f"data: {json.dumps(final_chunk)}\n\n"
-    yield "data: [DONE]\n\n"
 
 if __name__ == '__main__':
     internal_ip = socket.gethostbyname(socket.gethostname())
