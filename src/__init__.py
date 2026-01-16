@@ -18,6 +18,10 @@ from .config import (
 
 # Import des services
 from .infrastructure.token_service import calculate_token
+from .infrastructure.error_handler import ERROR_HANDLER
+
+
+from .domain.conversation_service import format_conversation_history
 from .domain.models import (
     ALL_ONE_MIN_AVAILABLE_MODELS, 
     vision_supported_models, 
@@ -26,3 +30,4 @@ from .domain.models import (
 
 # On initialise l'app immédiatement pour l'exposer
 app, logger, limiter = create_app()
+

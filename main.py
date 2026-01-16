@@ -1,13 +1,14 @@
 from src import (
-    app, logger, limiter, 
+    app, logger, limiter, ERROR_HANDLER,
+    format_conversation_history,
     request, jsonify, make_response, Response,
     AVAILABLE_MODELS, calculate_token,
     ONE_MIN_API_URL, ONE_MIN_CONVERSATION_API_URL,
     ONE_MIN_CONVERSATION_API_STREAMING_URL, ONE_MIN_ASSET_URL,
     vision_supported_models, image_generation_models,
-    ALL_ONE_MIN_AVAILABLE_MODELS, # Ajouté pour la route /v1/models
-    PERMIT_MODELS_FROM_SUBSET_ONLY, # Ajouté pour la route /v1/models
-    SUBSET_OF_ONE_MIN_PERMITTED_MODELS # Ajouté pour la route /v1/models
+    ALL_ONE_MIN_AVAILABLE_MODELS,
+    PERMIT_MODELS_FROM_SUBSET_ONLY,
+    SUBSET_OF_ONE_MIN_PERMITTED_MODELS
 )
 import requests
 import time
@@ -48,54 +49,6 @@ def models():
         ]
     models_data.extend(one_min_models_data)
     return jsonify({"data": models_data, "object": "list"})
-
-def ERROR_HANDLER(code, model=None, key=None):
-    # Handle errors in OpenAI-Structued Error
-    error_codes = { # Internal Error Codes
-        1002: {"message": f"The model {model} does not exist.", "type": "invalid_request_error", "param": None, "code": "model_not_found", "http_code": 400},
-        1020: {"message": f"Incorrect API key provided: {key}. You can find your API key at https://app.1min.ai/api.", "type": "authentication_error", "param": None, "code": "invalid_api_key", "http_code": 401},
-        1021: {"message": "Invalid Authentication", "type": "invalid_request_error", "param": None, "code": None, "http_code": 401},
-        1212: {"message": f"Incorrect Endpoint. Please use the /v1/chat/completions endpoint.", "type": "invalid_request_error", "param": None, "code": "model_not_supported", "http_code": 400},
-        1044: {"message": f"This model does not support image inputs.", "type": "invalid_request_error", "param": None, "code": "model_not_supported", "http_code": 400},
-        1412: {"message": f"No message provided.", "type": "invalid_request_error", "param": "messages", "code": "invalid_request_error", "http_code": 400},
-        1423: {"message": f"No content in last message.", "type": "invalid_request_error", "param": "messages", "code": "invalid_request_error", "http_code": 400},
-        1405: {"message": "Method Not Allowed", "type": "invalid_request_error", "param": None, "code": None, "http_code": 405},
-    }
-    error_data = {k: v for k, v in error_codes.get(code, {"message": "Unknown error", "type": "unknown_error", "param": None, "code": None}).items() if k != "http_code"} # Remove http_code from the error data
-    logger.error(f"An error has occurred while processing the user's request. Error code: {code}")
-    return jsonify({"error": error_data}), error_codes.get(code, {}).get("http_code", 400) # Return the error data without http_code inside the payload and get the http_code to return.
-
-def format_conversation_history(messages, new_input):
-    """
-    Formats the conversation history into a structured string.
-    
-    Args:
-        messages (list): List of message dictionaries from the request
-        new_input (str): The new user input message
-    
-    Returns:
-        str: Formatted conversation history
-    """
-    formatted_history = ["Conversation History:\n"]
-    
-    for message in messages:
-        role = message.get('role', '').capitalize()
-        content = message.get('content', '')
-        
-        # Handle potential list content
-        if isinstance(content, list):
-            content = '\n'.join(item['text'] for item in content if 'text' in item)
-        
-        formatted_history.append(f"{role}: {content}")
-    
-    # Append additional messages only if there are existing messages
-    if messages: # Save credits if it is the first message.
-        formatted_history.append("Respond like normal. The conversation history will be automatically updated on the next MESSAGE. DO NOT ADD User: or Assistant: to your output. Just respond like normal.")
-        formatted_history.append("User Message:\n")
-    formatted_history.append(new_input) 
-    
-    return '\n'.join(formatted_history)
-
 
 @app.route('/v1/chat/completions', methods=['POST', 'OPTIONS'])
 @limiter.limit("500 per minute")
@@ -372,4 +325,3 @@ If does not work, try:
 {internal_ip}:5001/v1/chat/completions
 {printedcolors.Color.reset}""")
     serve(app, host='0.0.0.0', port=5001, threads=6) # Thread has a default of 4 if not specified. We use 6 to increase performance and allow multiple requests at once.
-
