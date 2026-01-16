@@ -1,6 +1,8 @@
 from src import (
     app, logger, limiter, ERROR_HANDLER,
     format_conversation_history,
+    get_formatted_models_list,
+    upload_image_to_1min,
     request, jsonify, make_response, Response,
     AVAILABLE_MODELS, calculate_token,
     ONE_MIN_API_URL, ONE_MIN_CONVERSATION_API_URL,
@@ -30,24 +32,14 @@ def index():
 @app.route('/v1/models')
 @limiter.limit("500 per minute")
 def models():
-    # Dynamically create the list of models with additional fields
-    models_data = []
-    if not PERMIT_MODELS_FROM_SUBSET_ONLY:
-        one_min_models_data = [
-            {
-                "id": model_name,
-                "object": "model",
-                "owned_by": "1minai",
-                "created": 1727389042
-            }
-            for model_name in ALL_ONE_MIN_AVAILABLE_MODELS
-        ]
-    else:
-        one_min_models_data = [
-            {"id": model_name, "object": "model", "owned_by": "1minai", "created": 1727389042}
-            for model_name in SUBSET_OF_ONE_MIN_PERMITTED_MODELS
-        ]
-    models_data.extend(one_min_models_data)
+    # On appelle le service en lui passant les variables de configuration
+    models_data = get_formatted_models_list(
+        ALL_ONE_MIN_AVAILABLE_MODELS, 
+        PERMIT_MODELS_FROM_SUBSET_ONLY, 
+        SUBSET_OF_ONE_MIN_PERMITTED_MODELS
+    )
+    
+    # On retourne le résultat final
     return jsonify({"data": models_data, "object": "list"})
 
 @app.route('/v1/chat/completions', methods=['POST', 'OPTIONS'])
@@ -55,116 +47,96 @@ def models():
 def conversation():
     if request.method == 'OPTIONS':
         return handle_options_request()
-    image = False
-    
 
+    # 1. Authentification
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith("Bearer "):
         logger.error("Invalid Authentication")
         return ERROR_HANDLER(1021)
     
     api_key = auth_header.split(" ")[1]
+    headers = {'API-KEY': api_key, 'Content-Type': 'application/json'}
     
-    headers = {
-        'API-KEY': api_key
-    }
-    
+    # 2. Préparation des données
     request_data = request.json
-    
-    all_messages = format_conversation_history(request_data.get('messages', []), request_data.get('new_input', ''))
-
     messages = request_data.get('messages', [])
+    model_name = request_data.get('model', 'mistral-nemo')
+
     if not messages:
         return ERROR_HANDLER(1412)
 
-    user_input = messages[-1].get('content')
-    if not user_input:
-        return ERROR_HANDLER(1423)
-
-    # Check if user_input is a list and combine text if necessary
+    # 3. Formatage de l'historique (Service Domain)
+    all_messages = format_conversation_history(messages, request_data.get('new_input', ''))
+    
+    # 4. Gestion de la Vision (Service Infrastructure)
     image = False
-    if isinstance(user_input, list):
-        image_paths = []
-        for item in user_input:
-            if 'text' in item:
-                combined_text = '\n'.join(item['text'])
-            try:
-                if 'image_url' in item:
-                    if request_data.get('model', 'mistral-nemo') not in vision_supported_models:
-                        return ERROR_HANDLER(1044, request_data.get('model', 'mistral-nemo'))
-                    if item['image_url']['url'].startswith("data:image/png;base64,"):
-                        base64_image = item['image_url']['url'].split(",")[1]
-                        binary_data = base64.b64decode(base64_image)
-                    else:
-                        binary_data = requests.get(item['image_url']['url'])
-                        binary_data.raise_for_status()  # Raise an error for bad responses
-                        binary_data = BytesIO(binary_data.content)
-                    files = {
-                        'asset': ("relay" + str(uuid.uuid4()), binary_data, 'image/png')
-                    }
-                    asset = requests.post(ONE_MIN_ASSET_URL, files=files, headers=headers)
-                    asset.raise_for_status()  # Raise an error for bad responses
-                    image_path = asset.json()['fileContent']['path']
-                    image_paths.append(image_path)
+    image_paths = []
+    user_content = messages[-1].get('content')
+
+    if isinstance(user_content, list):
+        for item in user_content:
+            if 'image_url' in item:
+                if model_name not in vision_supported_models:
+                    return ERROR_HANDLER(1044, model_name)
+                try:
+                    # Utilisation du service extrait
+                    path = upload_image_to_1min(item, headers, ONE_MIN_ASSET_URL)
+                    image_paths.append(path)
                     image = True
-            except Exception as e:
-                print(f"An error occurred e:" + str(e)[:60])
-                # Optionally log the error or return an appropriate response
+                except Exception as e:
+                    logger.error(f"Asset Upload Error: {str(e)[:100]}")
+                    return ERROR_HANDLER(500) # Ou gestion spécifique
 
-        user_input = str(combined_text)
-
+    # 5. Validation du modèle et Tokens
     prompt_token = calculate_token(str(all_messages))
-    if PERMIT_MODELS_FROM_SUBSET_ONLY and request_data.get('model', 'mistral-nemo') not in AVAILABLE_MODELS:
-        return ERROR_HANDLER(1002, request_data.get('model', 'mistral-nemo')) # Handle invalid model
+    if PERMIT_MODELS_FROM_SUBSET_ONLY and model_name not in AVAILABLE_MODELS:
+        return ERROR_HANDLER(1002, model_name)
     
-    logger.debug(f"Proccessing {prompt_token} prompt tokens with model {request_data.get('model', 'mistral-nemo')}")
+    logger.debug(f"Processing {prompt_token} tokens with model {model_name}")
 
-    if not image:
-        payload = {
-            "type": "CHAT_WITH_AI",
-            "model": request_data.get('model', 'mistral-nemo'),
-            "promptObject": {
-                "prompt": all_messages,
-                "isMixed": False,
-                "webSearch": False
-            }
+    # 6. Construction du Payload 1min.ai
+    payload = {
+        "model": model_name,
+        "promptObject": {
+            "prompt": all_messages,
+            "isMixed": False,
         }
+    }
+    
+    if image:
+        payload["type"] = "CHAT_WITH_IMAGE"
+        payload["promptObject"]["imageList"] = image_paths
     else:
-        payload = {
-            "type": "CHAT_WITH_IMAGE",
-            "model": request_data.get('model', 'mistral-nemo'),
-            "promptObject": {
-                "prompt": all_messages,
-                "isMixed": False,
-                "imageList": image_paths
-            }
-        }
-    
-    headers = {"API-KEY": api_key, 'Content-Type': 'application/json'}
+        payload["type"] = "CHAT_WITH_AI"
+        payload["promptObject"]["webSearch"] = False
 
-    if not request_data.get('stream', False):
-        # Non-Streaming Response
-        logger.debug("Non-Streaming AI Response")
+    # 7. Exécution de la requête (Streaming ou Standard)
+    is_streaming = request_data.get('stream', False)
+
+    if not is_streaming:
         response = requests.post(ONE_MIN_API_URL, json=payload, headers=headers)
         response.raise_for_status()
-        one_min_response = response.json()
         
-        transformed_response = transform_response(one_min_response, request_data, prompt_token)
-        response = make_response(jsonify(transformed_response))
-        set_response_headers(response)
-        
-        return response, 200
+        transformed = transform_response(response.json(), request_data, prompt_token)
+        flask_res = make_response(jsonify(transformed))
+        set_response_headers(flask_res)
+        return flask_res, 200
     
     else:
-        # Streaming Response
-        logger.debug("Streaming AI Response")
-        response_stream = requests.post(ONE_MIN_CONVERSATION_API_STREAMING_URL, data=json.dumps(payload), headers=headers, stream=True)
-        if response_stream.status_code != 200:
-            if response_stream.status_code == 401:
-                return ERROR_HANDLER(1020)
-            logger.error(f"An unknown error occurred while processing the user's request. Error code: {response_stream.status_code}")
-            return ERROR_HANDLER(response_stream.status_code)
-        return Response(stream_response(response_stream, request_data, request_data.get('model', 'mistral-nemo'), int(prompt_token)), content_type='text/event-stream')
+        res_stream = requests.post(
+            ONE_MIN_CONVERSATION_API_STREAMING_URL, 
+            data=json.dumps(payload), 
+            headers=headers, 
+            stream=True
+        )
+        
+        if res_stream.status_code != 200:
+            return ERROR_HANDLER(res_stream.status_code) if res_stream.status_code == 401 else ERROR_HANDLER(1020)
+
+        return Response(
+            stream_response(res_stream, request_data, model_name, int(prompt_token)), 
+            content_type='text/event-stream'
+        )
 
 @app.route('/v1/images/generations', methods=['POST', 'OPTIONS'])
 @limiter.limit("100 per minute")
