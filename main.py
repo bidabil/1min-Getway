@@ -1,191 +1,24 @@
-from flask import Flask, request, jsonify, make_response, Response
+from src import (
+    app, logger, limiter, 
+    request, jsonify, make_response, Response,
+    AVAILABLE_MODELS, calculate_token,
+    ONE_MIN_API_URL, ONE_MIN_CONVERSATION_API_URL,
+    ONE_MIN_CONVERSATION_API_STREAMING_URL, ONE_MIN_ASSET_URL,
+    vision_supported_models, image_generation_models,
+    ALL_ONE_MIN_AVAILABLE_MODELS, # Ajouté pour la route /v1/models
+    PERMIT_MODELS_FROM_SUBSET_ONLY, # Ajouté pour la route /v1/models
+    SUBSET_OF_ONE_MIN_PERMITTED_MODELS # Ajouté pour la route /v1/models
+)
 import requests
 import time
 import uuid
-import warnings
-from waitress import serve
 import json
-import tiktoken
-import socket
-from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-from mistral_common.protocol.instruct.messages import UserMessage
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
-from pymemcache.client.base import Client
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 import os
-import logging
-from io import BytesIO
-import coloredlogs
-import printedcolors
 import base64
-
-# Suppress warnings from flask_limiter
-warnings.filterwarnings("ignore", category=UserWarning, module="flask_limiter.extension")
-
-# Create a logger object
-logger = logging.getLogger("1min-relay")
-
-# Install coloredlogs with desired log level
-coloredlogs.install(level='DEBUG', logger=logger)
-
-def check_memcached_connection(host='memcached', port=11211):
-    try:
-        client = Client((host, port))
-        client.set('test_key', 'test_value')
-        if client.get('test_key') == b'test_value':
-            client.delete('test_key')  # Clean up
-            return True
-        else:
-            return False
-    except:
-        return False
-        
-logger.info('''
-    _ __  __ _      ___     _           
- / |  \/  (_)_ _ | _ \___| |__ _ _  _ 
- | | |\/| | | ' \|   / -_) / _` | || |
- |_|_|  |_|_|_||_|_|_\___|_\__,_|\_, |
-                                 |__/ ''')
-
-
-def calculate_token(sentence, model="DEFAULT"):
-    """Calculate the number of tokens in a sentence based on the specified model."""
-    
-    if model.startswith("mistral"):
-        # Initialize the Mistral tokenizer
-        tokenizer = MistralTokenizer.v3(is_tekken=True)
-        model_name = "open-mistral-nemo" # Default to Mistral Nemo
-        tokenizer = MistralTokenizer.from_model(model_name)
-        tokenized = tokenizer.encode_chat_completion(
-            ChatCompletionRequest(
-                messages=[
-                    UserMessage(content=sentence),
-                ],
-                model=model_name,
-            )
-        )
-        tokens = tokenized.tokens
-        return len(tokens)
-
-    elif model in ["gpt-3.5-turbo", "gpt-4"]:
-        # Use OpenAI's tiktoken for GPT models
-        encoding = tiktoken.encoding_for_model(model)
-        tokens = encoding.encode(sentence)
-        return len(tokens)
-
-    else:
-        # Default to openai
-        encoding = tiktoken.encoding_for_model("gpt-4")
-        tokens = encoding.encode(sentence)
-        return len(tokens)
-app = Flask(__name__)
-if check_memcached_connection():
-    limiter = Limiter(
-        get_remote_address,
-        app=app,
-        storage_uri="memcached://memcached:11211",  # Connect to Memcached created with docker
-    )
-else:
-    # Used for ratelimiting without memcached
-    limiter = Limiter(
-        get_remote_address,
-        app=app,
-    )
-    logger.warning("Memcached is not available. Using in-memory storage for rate limiting. Not-Recommended")
-
-
-ONE_MIN_API_URL = "https://api.1min.ai/api/features"
-ONE_MIN_CONVERSATION_API_URL = "https://api.1min.ai/api/conversations"
-ONE_MIN_CONVERSATION_API_STREAMING_URL = "https://api.1min.ai/api/features?isStreaming=true"
-ONE_MIN_ASSET_URL = "https://api.1min.ai/api/assets"
-
-# Define the models that are available for use
-ALL_ONE_MIN_AVAILABLE_MODELS = [
-    "gpt-5-nano",
-    "gpt-5",
-    "gpt-5-mini",
-    "o3-mini",
-    "deepseek-chat",
-    "deepseek-reasoner",
-    "o1-preview",
-    "o1-mini",
-    "gpt-4o-mini",
-    "gpt-4o",
-    "gpt-4-turbo",
-    "gpt-4",
-    "gpt-3.5-turbo",
-    "claude-instant-1.2",
-    "claude-2.1",
-    "claude-3-7-sonnet-20250219",
-    "claude-3-5-sonnet-20240620",
-    "claude-3-opus-20240229",
-    "claude-3-sonnet-20240229",
-    "claude-3-haiku-20240307",
-    "gemini-1.0-pro",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
-    "mistral-large-latest",
-    "mistral-small-latest",
-    "mistral-nemo",
-    "open-mistral-7b",
-    "gpt-o1-pro",
-    "gpt-o4-mini",
-    "gpt-4.1-nano",
-    "gpt-4.1-mini",
-
-   # Replicate
-   "meta/llama-2-70b-chat", 
-   "meta/meta-llama-3-70b-instruct", 
-   "meta/meta-llama-3.1-405b-instruct", 
-   "command"
-]
-
-# Define the models that support vision inputs
-vision_supported_models = [
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4-turbo"
-]
-
-# Define the models that support image generation
-image_generation_models = [
-    "stable-image",
-    "stable-diffusion-xl-1024-v1-0",
-    "stable-diffusion-v1-6",
-    "esrgan-v1-x2plus",
-    "clipdrop",
-    "midjourney",
-    "midjourney_6_1",
-    # Learnardo
-    "6b645e3a-d64f-4341-a6d8-7a3690fbf042" # LEONARDO_PHOENIX
-    "b24e16ff-06e3-43eb-8d33-4416c2d75876" # LEONARDO_LIGHTNING_XL
-    "e71a1c2f-4f80-4800-934f-2c68979d8cc8" # LEONARDO_ANIME_XL
-    "1e60896f-3c26-4296-8ecc-53e2afecc132" # LEONARDO_DIFFUSION_XL
-    "aa77f04e-3eec-4034-9c07-d0f619684628" # LEONARDO_KINO_XL
-    "2067ae52-33fd-4a82-bb92-c2c55e7d2786" # LEONARDO_ALBEDO_BASE_XL
-    "black-forest-labs/flux-schnell",
-]
-
-
-# Default values
-SUBSET_OF_ONE_MIN_PERMITTED_MODELS = ["mistral-nemo", "gpt-4o", "deepseek-chat"]
-PERMIT_MODELS_FROM_SUBSET_ONLY = False
-
-# Read environment variables
-one_min_models_env = os.getenv("SUBSET_OF_ONE_MIN_PERMITTED_MODELS")  # e.g. "mistral-nemo,gpt-4o,deepseek-chat"
-permit_not_in_available_env = os.getenv("PERMIT_MODELS_FROM_SUBSET_ONLY")  # e.g. "True" or "False"
-
-# Parse or fall back to defaults
-if one_min_models_env:
-    SUBSET_OF_ONE_MIN_PERMITTED_MODELS = one_min_models_env.split(",")
-
-if permit_not_in_available_env and permit_not_in_available_env.lower() == "true":
-    PERMIT_MODELS_FROM_SUBSET_ONLY = True
-
-# Combine into a single list
-AVAILABLE_MODELS = []
-AVAILABLE_MODELS.extend(SUBSET_OF_ONE_MIN_PERMITTED_MODELS)
+import socket
+import printedcolors
+from io import BytesIO
+from waitress import serve
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
