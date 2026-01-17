@@ -1,1 +1,37 @@
+# --- Secrets & Config ---
+.env
+auth.json
+
+# --- Python & Virtual Environments ---
+.venv/
+env/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# --- Docker ---
+.docker/
+# On ignore les fichiers de données si tu en as (ex: volumes memcached locaux)
+
+# --- Logs & Runtime ---
+logs/
+*.log
+instance/
+
+# --- OS Specific ---
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo

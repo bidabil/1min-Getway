@@ -1,27 +1,38 @@
+version: '3.8'
+
 services:
-  # Memcached for storing rate-limits data.
+  # Memcached: High-performance memory caching for Rate Limiting
   memcached:
-    image: memcached:latest
+    image: memcached:alpine # Using Alpine for a smaller footprint
+    container_name: 1min-gateway-cache
     networks:
-      - 1min-relay-network
+      - 1min-gateway-network
     restart: unless-stopped
-    # Does not require to expose port. Only used for internal communication.
-  # 1min-relay
-  1min-relay:
-    image: kokofixcomputers/1min-relay:latest
-    container_name: 1min-relay-container
+
+  # 1min-Gateway: Core Relay Service
+  1min-gateway:
+    image: billelattafi/1min-gateway:latest
+    container_name: 1min-gateway-container
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "5001:5001"
-    networks:
-      - 1min-relay-network
     depends_on:
       - memcached
+    networks:
+      - 1min-gateway-network
+    env_file:
+      - .env
     environment:
-      # Use comma-separated string for ONE_MIN_AVAILABLE_MODELS Default: "mistral-nemo", "gpt-4o", "deepseek-chat"
-      - SUBSET_OF_ONE_MIN_PERMITTED_MODELS=mistral-nemo,gpt-4o-mini,deepseek-chat
-      # Set your boolean as "True" or "False" for PERMIT_MODELS_FROM_SUBSET_ONLY Default: False
-      - PERMIT_MODELS_FROM_SUBSET_ONLY=False
+      # These environment variables can override the .env file if defined here
+      - SUBSET_OF_ONE_MIN_PERMITTED_MODELS=${SUBSET_OF_ONE_MIN_PERMITTED_MODELS:-mistral-nemo,gpt-4o-mini,deepseek-chat}
+      - PERMIT_MODELS_FROM_SUBSET_ONLY=${PERMIT_MODELS_FROM_SUBSET_ONLY:-False}
+    volumes:
+      # Persistence: Ensures your logs survive container updates
+      - ./logs:/app/logs
     restart: unless-stopped
 
 networks:
-  1min-relay-network:  # Define the custom network
+  1min-gateway-network:
+    driver: bridge

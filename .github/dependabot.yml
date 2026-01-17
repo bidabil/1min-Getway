@@ -5,7 +5,20 @@
 
 version: 2
 updates:
-  - package-ecosystem: "pip" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Update Python dependencies (requirements.txt)
+  - package-ecosystem: "pip"
+    directory: "/"
     schedule:
-      interval: "weekly" 
+      interval: "weekly"
+
+  # Update GitHub Actions (the versions in your ci-cd.yml)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Update Docker base images (Dockerfile)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
