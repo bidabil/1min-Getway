@@ -1,5 +1,5 @@
 # Use a slim version of Python 3.10 for a small and secure image
-FROM python:3.10-slim
+FROM python:3.14-slim
 
 # Prevent Python from writing .pyc files and ensure logs are sent straight to terminal
 ENV PYTHONDONTWRITEBYTECODE=1
