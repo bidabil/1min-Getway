@@ -9,7 +9,6 @@ on:
 
 env:
   IMAGE_NAME: billelattafi/1min-gateway
-  # GHCR exige des noms en minuscules pour fonctionner
   GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
 
 jobs:
@@ -21,10 +20,10 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- ÉTAPE DE TEST : Indispensable pour la fiabilité ---
+      # --- STEP 1: TEST PHASE ---
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -33,16 +32,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Clean install: everything comes from requirements.txt
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install pytest  # Pytest est souvent une dépendance de test uniquement
 
-      - name: Run tests
+      - name: Run automated tests
         run: |
           export PYTHONPATH=$PYTHONPATH:.
           python -m pytest
-      # -------------------------------------------------------
 
-      - name: Install cosign
+      # --- STEP 2: PREPARATION ---
+      - name: Install Cosign
         if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@v3.5.0
 
@@ -52,6 +51,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # --- STEP 3: REGISTRY AUTHENTICATION ---
       - name: Login to Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -67,7 +67,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
+      # --- STEP 4: BUILD AND DEPLOY ---
+      - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -75,7 +76,7 @@ jobs:
             docker.io/${{ env.IMAGE_NAME }}
             ghcr.io/${{ env.GHCR_IMAGE }}
 
-      - name: Build and push
+      - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@v5
         with:
@@ -87,13 +88,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Sign images
+      # --- STEP 5: SECURITY SIGNING ---
+      - name: Sign the published Docker images
         if: github.event_name != 'pull_request'
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: |
-          # Correction de la boucle de signature pour gérer les tags multiples
           for tag in ${TAGS// / }; do
             cosign sign --yes ${tag}@${DIGEST}
           done
