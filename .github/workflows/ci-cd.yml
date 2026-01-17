@@ -43,7 +43,7 @@ jobs:
       # --- STEP 2: PREPARATION ---
       - name: Install Cosign
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v3.5.0
+        uses: sigstore/cosign-installer@v4.0.0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
