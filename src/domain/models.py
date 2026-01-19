@@ -1,63 +1,66 @@
 """
 Domain models configuration for 1min-Gateway.
-Defines supported AI models for Chat, Vision, and Image Generation.
+Strictly aligned with 1min.AI 2026 Documentation.
 """
 
-# Complete list of available text/chat models via 1min.ai
+# Complete list of available text/chat models via 1min.ai (Doc 2026)
 ALL_ONE_MIN_AVAILABLE_MODELS = [
-    # OpenAI Next-Gen & Standard
-    "gpt-5-nano", "gpt-5", "gpt-5-mini", "o3-mini", "o1-preview", "o1-mini", 
-    "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo",
+    # alibaba Models
+    "qwen3-max", "qwen-plus", "qwen-max", "qwen-flash",
     
-    # DeepSeek
-    "deepseek-chat", "deepseek-reasoner",
+    # Anthropic Models
+    "claude-sonnet-4-5-20250929", "claude-sonnet-4-20250514",
+    "claude-opus-4-5-20251101", "claude-opus-4-20250514",
+    "claude-opus-4-1-20250805", "claude-haiku-4-5-20251001",
+    "claude-3-5-haiku-20241022",
     
-    # Anthropic Claude
-    "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20240620", 
-    "claude-3-opus-20240229", "claude-3-sonnet-20240229", 
-    "claude-3-haiku-20240307", "claude-2.1", "claude-instant-1.2",
+    # Cohere Models
+    "command-r-08-2024",
     
-    # Google Gemini
-    "gemini-1.0-pro", "gemini-1.5-pro", "gemini-1.5-flash",
+    # DeepSeek Models
+    "deepseek-reasoner", "deepseek-chat",
     
-    # Mistral AI
-    "mistral-large-latest", "mistral-small-latest", "mistral-nemo",
-    "open-mistral-7b",
+    # GoogleAI Models
+    "gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash",
     
-    # Meta Llama
-    "meta/llama-2-70b-chat", "meta/meta-llama-3-70b-instruct", 
-    "meta/meta-llama-3.1-405b-instruct",
+    # Mistral Models
+    "magistral-small-latest", "magistral-medium-latest", "ministral-14b-latest",
+    "open-mistral-nemo", "mistral-small-latest", "mistral-medium-latest", "mistral-large-latest",
     
-    # Others & Experimental
-    "command", "gpt-o1-pro", "gpt-o4-mini", "gpt-4.1-nano", "gpt-4.1-mini"
+    # OpenAI Models
+    "gpt-5.1-codex-mini", "gpt-5.1-codex", "o4-mini", "o3-mini",
+    "gpt-5.2-pro", "gpt-5.2", "gpt-5.1", "gpt-5-nano", "gpt-5-mini",
+    "gpt-5-chat-latest", "gpt-5", "gpt-4o-mini", "gpt-4o",
+    "gpt-4.1-nano", "gpt-4.1-mini", "gpt-4.1", "gpt-4-turbo", "gpt-3.5-turbo",
+    "o4-mini-deep-research", "o3-pro", "o3-deep-research", "o3",
+    
+    # Perplexity Models
+    "sonar-reasoning-pro", "sonar-reasoning", "sonar-pro", "sonar-deep-research", "sonar",
+    
+    # xAI Models
+    "grok-4-fast-reasoning", "grok-4-fast-non-reasoning", "grok-4-0709", "grok-3-mini", "grok-3",
+    
+    # Extra Models
+    "meta/meta-llama-3.1-405b-instruct", "meta/meta-llama-3-70b-instruct",
+    "meta/llama-4-scout-instruct", "meta/llama-4-maverick-instruct", "meta/llama-2-70b-chat",
+    "openai/gpt-oss-20b", "openai/gpt-oss-120b"
 ]
 
 # Models that support image input (Multimodal/Vision)
+# Based on common knowledge of 2026 model capabilities listed in doc
 VISION_SUPPORTED_MODELS = [
     "gpt-4o", 
     "gpt-4o-mini", 
     "gpt-4-turbo", 
-    "claude-3-5-sonnet-20240620",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash"
+    "claude-sonnet-4-5-20250929",
+    "gemini-3-pro-preview",
+    "gemini-2.5-flash"
 ]
 
 # Models specialized in Image Generation (Text-to-Image)
+# As per "Non-Streaming Features Example" and "Response Payload" in doc
 IMAGE_GENERATION_MODELS = [
-    # Stable Diffusion & Variants
-    "stable-image", "stable-diffusion-xl-1024-v1-0", "stable-diffusion-v1-6",
-    
-    # Specialized Tools
-    "esrgan-v1-x2plus", "clipdrop", "midjourney", "midjourney_6_1",
-    
-    # Leonardo AI (UUID Identifiers)
-    "6b645e3a-d64f-4341-a6d8-7a3690fbf042", # LEONARDO_PHOENIX
-    "b24e16ff-06e3-43eb-8d33-4416c2d75876", # LEONARDO_LIGHTNING_XL
-    "e71a1c2f-4f80-4800-934f-2c68979d8cc8", # LEONARDO_ANIME_XL
-    "1e60896f-3c26-4296-8ecc-53e2afecc132", # LEONARDO_DIFFUSION_XL
-    "aa77f04e-3eec-4034-9c07-d0f619684628", # LEONARDO_KINO_XL
-    "2067ae52-33fd-4a82-bb92-c2c55e7d2786", # LEONARDO_ALBEDO_BASE_XL
-    
-    # Flux
-    "black-forest-labs/flux-schnell"
+    "black-forest-labs/flux-schnell",
+    "magic-art",
+    "stable-image"
 ]
