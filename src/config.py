@@ -16,6 +16,8 @@ ONE_MIN_ASSET_URL = os.getenv("ONE_MIN_ASSET_URL", "https://api.1min.ai/api/asse
 # URL for streaming specifically (constructed from the base as per doc)
 ONE_MIN_CONVERSATION_API_STREAMING_URL = f"{ONE_MIN_API_URL}?isStreaming=true"
 
+ONE_MIN_CONVERSATION_URL = "https://api.1min.ai/api/conversations"
+
 # --- Model Filtering Logic ---
 
 env_subset = os.getenv("SUBSET_OF_ONE_MIN_PERMITTED_MODELS")
