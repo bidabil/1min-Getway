@@ -49,14 +49,12 @@ def conversation():
     if request.method == 'OPTIONS':
         return handle_options_request()
 
-    # 1. Authentication Check (Strict Bearer Compliance)
+    # 1. Authentication Check (Strict Bearer Compliance 2026)
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith("Bearer "):
         return get_error_response(1021)
     
     api_key = auth_header.split(" ")[1]
-    
-    # 1min.AI 2026 Header Standard
     headers = {
         'Authorization': f'Bearer {api_key}', 
         'Content-Type': 'application/json'
@@ -84,25 +82,22 @@ def conversation():
                 if model_name not in VISION_SUPPORTED_MODELS:
                     return get_error_response(1044, model_name)
                 try:
-                    # Asset service now uses the same Bearer headers
-                    path = upload_image_to_1min(item, headers, ONE_MIN_ASSET_URL)
+                    # Pass raw api_key: asset_service uses 'API-KEY' header per doc
+                    path = upload_image_to_1min(item, api_key, ONE_MIN_ASSET_URL)
                     image_paths.append(path)
                     has_image = True
                 except Exception as e:
                     logger.error(f"Vision Upload Failed: {str(e)[:100]}")
                     return get_error_response(500)
 
-    # 5. History Formatting & Token Calculation
+    # 5. History & Tokens
     all_messages = format_conversation_history(history, current_user_message)
     prompt_token = calculate_token(all_messages, model_name)
     
-    # 6. Model Availability Check
     if PERMIT_MODELS_FROM_SUBSET_ONLY and model_name not in AVAILABLE_MODELS:
-        logger.warning(f"REJECTED | Model {model_name} not in allowed subset.")
         return get_error_response(1002, model_name)
     
-    # 7. Payload Preparation (Strict promptObject Compliance)
-    # Added webSearch, numOfSite, and maxWord as per 2026 docs
+    # 6. Payload Preparation (Strict promptObject)
     payload = {
         "model": model_name,
         "promptObject": {
@@ -118,21 +113,18 @@ def conversation():
     if has_image:
         payload["promptObject"]["imageList"] = image_paths
 
-    # 8. Execution (Stream vs Non-Stream)
+    # 7. Execution
     is_streaming = request_data.get('stream', False)
-    logger.info(f"REQ | Model: {model_name} | Tokens: {prompt_token} | Stream: {is_streaming}")
+    logger.info(f"REQ | Model: {model_name} | Stream: {is_streaming}")
 
     try:
         if not is_streaming:
-            # Longer timeout for reasoning or deep research models (2026 specs)
-            timeout_val = 120 if "research" in model_name or any(x in model_name for x in ["o1", "o3", "reasoner"]) else 45
-            
+            timeout_val = 120 if any(x in model_name for x in ["o1", "o3", "research", "reasoner"]) else 45
             response = requests.post(ONE_MIN_API_URL, json=payload, headers=headers, timeout=timeout_val)
             response.raise_for_status()
             
             transformed = transform_response(response.json(), model_name, prompt_token)
-            flask_res = make_response(jsonify(transformed))
-            return set_response_headers(flask_res), 200
+            return set_response_headers(make_response(jsonify(transformed))), 200
         else:
             res_stream = requests.post(
                 ONE_MIN_CONVERSATION_API_STREAMING_URL, 
@@ -156,7 +148,6 @@ def conversation():
 @app.route('/v1/images/generations', methods=['POST', 'OPTIONS'])
 @limiter.limit("100 per minute")
 def generate_images():
-    """Relays image generation requests to 1min.ai."""
     if request.method == 'OPTIONS':
         return handle_options_request()
 
@@ -164,10 +155,7 @@ def generate_images():
     if not auth_header: return get_error_response(1021)
 
     api_key = auth_header.split(" ")[1]
-    headers = {
-        'Authorization': f'Bearer {api_key}', 
-        'Content-Type': 'application/json'
-    }
+    headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
 
     request_data = request.json
     prompt = request_data.get('prompt')
@@ -176,7 +164,6 @@ def generate_images():
     if model not in IMAGE_GENERATION_MODELS:
         return get_error_response(1044, model)
 
-    # Syncing with Non-Streaming Features Example
     payload = {
         "type": "IMAGE_GENERATOR",
         "model": model,
@@ -198,5 +185,5 @@ def generate_images():
 
 if __name__ == '__main__':
     internal_ip = socket.gethostbyname(socket.gethostname())
-    logger.info(f"{printedcolors.Color.fg.lightcyan}1min-Gateway is ready! Endpoint: http://{internal_ip}:5001/v1{printedcolors.Color.reset}")
+    logger.info(f"{printedcolors.Color.fg.lightcyan}1min-Gateway ready! http://{internal_ip}:5001/v1{printedcolors.Color.reset}")
     serve(app, host='0.0.0.0', port=5001, threads=6)

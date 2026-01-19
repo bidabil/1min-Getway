@@ -4,11 +4,10 @@ from flask import request, jsonify, make_response, Response
 # Core application factory
 from .factory import create_app
 
-# Centralized configuration
+# Centralized configuration (STRICT 2026 ALIGNMENT)
 from .config import (
     AVAILABLE_MODELS, 
     ONE_MIN_API_URL, 
-    ONE_MIN_CONVERSATION_API_URL,
     ONE_MIN_CONVERSATION_API_STREAMING_URL,
     ONE_MIN_ASSET_URL,
     PERMIT_MODELS_FROM_SUBSET_ONLY,
@@ -33,5 +32,4 @@ from .domain.models import (
 )
 
 # Initialize the Flask application, Logger and Rate Limiter
-# Important: This must happen AFTER all imports to avoid circular dependencies
 app, logger, limiter = create_app()
