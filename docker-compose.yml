@@ -29,9 +29,7 @@ services:
   1min-gateway:
     image: billelattafi/1min-gateway:latest
     container_name: 1min-gateway-container
-    build:
-      context: .
-      dockerfile: Dockerfile
+
     # WATCHTOWER LABEL
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
