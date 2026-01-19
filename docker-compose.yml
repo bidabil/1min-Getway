@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  # --- WATCHTOWER SERVICE ---
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_LABEL_ENABLE=true
+      - REPO_USER=${DOCKER_USER}
+      - REPO_PASS=${DOCKER_TOKEN}
+    networks:
+      - 1min-gateway-network
+
   # Memcached: High-performance memory caching for Rate Limiting
   memcached:
     image: memcached:alpine # Using Alpine for a smaller footprint
@@ -16,6 +32,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # WATCHTOWER LABEL
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     ports:
       - "5001:5001"
     depends_on:
