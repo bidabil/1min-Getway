@@ -29,7 +29,6 @@ services:
   1min-gateway:
     image: billelattafi/1min-gateway:latest
     container_name: 1min-gateway-container
-
     # WATCHTOWER LABEL
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
