@@ -3,7 +3,6 @@ name: 1min-Gateway CI/CD
 on:
   push:
     branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main" ]
 
@@ -12,7 +11,31 @@ env:
   GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
 
 jobs:
+  # --- JOB 1: RELEASE (Calculates version based on commits) ---
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # --- JOB 2: BUILD AND PUSH (Triggered after release) ---
   build-and-push:
+    needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,7 +55,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Clean install: everything comes from requirements.txt
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run automated tests
@@ -75,6 +97,12 @@ jobs:
           images: |
             docker.io/${{ env.IMAGE_NAME }}
             ghcr.io/${{ env.GHCR_IMAGE }}
+          tags: |
+            # Keep latest for Watchtower
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Add the new version tag if a release is published (e.g., v1.1.0)
+            type=raw,value=${{ needs.release.outputs.new_release_version }},enable=${{ needs.release.outputs.new_release_published == 'true' }}
+            type=sha
 
       - name: Build and push Docker image
         id: build-and-push
@@ -90,7 +118,7 @@ jobs:
 
       # --- STEP 5: SECURITY SIGNING ---
       - name: Sign the published Docker images
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && needs.release.outputs.new_release_published == 'true'
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
