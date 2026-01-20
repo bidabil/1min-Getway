@@ -1,3 +1,5 @@
+#models.py
+
 """
 Domain models configuration for 1min-Gateway.
 Strictly aligned with 1min.AI 2026 Documentation.
