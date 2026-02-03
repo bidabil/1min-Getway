@@ -1,9 +1,8 @@
-#model_service.py
+# domain/model_provider.py
 import logging
 
 # Standardized logger for the model management layer
-logger = logging.getLogger("1min-gateway.model-service")
-
+logger = logging.getLogger("1min-gateway.model-provider")
 def get_formatted_models_list(all_models, permit_subset_only, subset_models):
     """
     Constructs the list of available models in OpenAI-compatible format.

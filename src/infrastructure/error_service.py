@@ -1,4 +1,4 @@
-#error_service.py
+# infrastructure/error_service.py
 
 from flask import jsonify
 import logging

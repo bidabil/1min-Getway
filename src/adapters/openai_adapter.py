@@ -1,26 +1,23 @@
-#openai_adapter.py
+# src/adapters/openai_adapter.py
 
 import time
 import uuid
 import json
 import logging
-# Ensure this import matches your project structure
 from ..infrastructure.token_service import calculate_token
 
-# Updated logger for the completion transformation layer
-logger = logging.getLogger("1min-gateway.completion-service")
+# Logger pour la couche de transformation
+logger = logging.getLogger("1min-gateway.openai-adapter")
 
 def transform_response(one_min_response, model_name, prompt_token):
     """
-    Transforms a non-streaming 1min.ai response into a standard OpenAI Chat Completion object.
-    Includes safety checks using .get() to prevent server crashes on malformed data.
+    Transforme une réponse non-streaming 1min.ai en objet OpenAI Chat Completion.
     """
     try:
-        # Safe extraction of the text content from 1min.ai nested structure
+        # Extraction sécurisée selon la structure imbriquée de 1min.ai
         result_list = one_min_response.get('aiRecord', {}).get('aiRecordDetail', {}).get('resultObject', [])
         content = result_list[0] if result_list else "Error: No response content from provider."
         
-        # Calculate tokens for the assistant's response
         completion_token = calculate_token(content)
         
         return {
@@ -42,26 +39,48 @@ def transform_response(one_min_response, model_name, prompt_token):
             }
         }
     except Exception as e:
-        logger.error(f"Transformation Error (Non-stream): {str(e)}")
-        # Returns a minimal error structure to avoid breaking the client UI
+        logger.error(f"ADAPTER | Erreur Transformation (Non-stream): {str(e)}")
         return {"error": "Failed to transform 1min.ai response"}
 
 def stream_response(response, model_name, prompt_tokens):
     """
-    Handles Server-Sent Events (SSE) streaming.
-    Re-packages chunks from 1min.ai into OpenAI-compatible stream chunks.
+    Gère le streaming SSE en nettoyant les chunks de 1min.ai.
+    Supporte les formats: Texte brut, JSON par chunk, et préfixes 'data:'.
     """
-    all_chunks = ""
-    chat_id = f"chatcmpl-{uuid.uuid4()}" # Maintain the same ID throughout the stream
+    all_chunks_text = ""
+    chat_id = f"chatcmpl-{uuid.uuid4()}"
     
-    # Iterate through the stream as chunks arrive
-    for chunk in response.iter_content(chunk_size=None): 
-        if not chunk:
+    # On itère sur les lignes du flux (plus sûr pour le SSE)
+    for line in response.iter_lines():
+        if not line:
             continue
             
-        decoded_chunk = chunk.decode('utf-8', errors='ignore')
-        all_chunks += decoded_chunk
+        decoded_line = line.decode('utf-8', errors='ignore').strip()
         
+        # 1. Nettoyage du préfixe "data: " si 1min.ai l'envoie déjà
+        if decoded_line.startswith("data: "):
+            decoded_line = decoded_line[6:]
+        
+        if decoded_line == "[DONE]":
+            break
+
+        content_to_send = ""
+        
+        # 2. Tentative de décodage JSON (si le chunk est un objet)
+        try:
+            data = json.loads(decoded_line)
+            # Selon la doc 1min.ai, le texte peut être dans 'result' ou directement à la racine
+            content_to_send = data.get("result", data.get("content", ""))
+        except json.JSONDecodeError:
+            # Si ce n't pas du JSON, c'est du texte brut
+            content_to_send = decoded_line
+
+        if not content_to_send:
+            continue
+
+        all_chunks_text += content_to_send
+        
+        # 3. Formatage pour OpenAI
         chunk_data = {
             "id": chat_id,
             "object": "chat.completion.chunk",
@@ -70,19 +89,17 @@ def stream_response(response, model_name, prompt_tokens):
             "choices": [
                 {
                     "index": 0,
-                    "delta": {"content": decoded_chunk},
+                    "delta": {"content": content_to_send},
                     "finish_reason": None
                 }
             ]
         }
         yield f"data: {json.dumps(chunk_data)}\n\n"
         
-    # Final token calculation after the stream is fully collected
-    completion_tokens = calculate_token(all_chunks)
+    # 4. Envoi des métadonnées finales (Tokens)
+    completion_tokens = calculate_token(all_chunks_text)
     
-    # Send the final metadata chunk containing usage statistics
-    # Essential for modern clients that track token consumption
-    final_chunk = {
+    final_metadata = {
         "id": chat_id,
         "object": "chat.completion.chunk",
         "created": int(time.time()),
@@ -94,5 +111,6 @@ def stream_response(response, model_name, prompt_tokens):
             "total_tokens": prompt_tokens + completion_tokens
         }
     }
-    yield f"data: {json.dumps(final_chunk)}\n\n"
+    
+    yield f"data: {json.dumps(final_metadata)}\n\n"
     yield "data: [DONE]\n\n"
