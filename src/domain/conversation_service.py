@@ -1,4 +1,4 @@
-#conversation_service.py
+# domain/conversation_service.py
 
 import logging
 
@@ -7,35 +7,30 @@ logger = logging.getLogger("1min-gateway.conversation-service")
 
 def format_conversation_history(messages, new_input):
     """
-    Service logic to format conversation history into a structured prompt 
-    compatible with 1min.ai's text-based completion requirements.
+    Service logic optimized for 1min.ai 2026.
+    Avoids token redundancy by letting 1min.ai handle history via conversationId.
     """
-    formatted_history = ["### CONVERSATION HISTORY"]
     
-    for message in messages:
-        # Standardizing roles for the AI engine
-        role = message.get('role', 'user').upper()
-        content = message.get('content', '')
-        
-        # Extract text content if it's a multimodal/list format
-        if isinstance(content, list):
-            content = ' '.join(item['text'] for item in content if 'text' in item)
-        
-        formatted_history.append(f"{role}: {content}")
-    
-    # Process current user input
+    # 1. Extraction propre du nouveau message (Current Task)
     clean_input = new_input
     if isinstance(new_input, list):
-        clean_input = ' '.join(item['text'] for item in new_input if 'text' in item)
+        # On extrait uniquement le texte si c'est un format OpenAI Vision
+        clean_input = ' '.join(item['text'] for item in new_input if item.get('type') == 'text')
 
-    # Clearly define the context vs. the immediate instruction
-    formatted_history.append("\n### CURRENT TASK")
-    formatted_history.append(f"USER: {clean_input}")
-    formatted_history.append("ASSISTANT: ")
-
-    final_prompt = '\n'.join(formatted_history)
+    # 2. LOGIQUE DE CONTEXTE (Doc 2026) :
+    # Si messages est vide, c'est le début d'un chat.
+    # Si messages contient des éléments, 1min.ai utilise le conversationId pour l'historique.
+    # On évite donc de renvoyer tout l'historique dans le champ 'prompt'.
     
-    # Traceability: Log the prompt size for cost and limit monitoring
-    logger.debug(f"Service: Conversation prompt generated ({len(final_prompt)} chars)")
+    if not messages:
+        # Premier message de la conversation
+        final_prompt = clean_input
+    else:
+        # Pour les messages suivants, on n'envoie que la nouvelle instruction.
+        # 1min.ai fera la jointure avec le passé via le conversationId.
+        final_prompt = clean_input
+
+    # Traceability
+    logger.debug(f"Service: Prompt processed. Length: {len(final_prompt)} chars. History ignored (handled by conversationId).")
     
     return final_prompt

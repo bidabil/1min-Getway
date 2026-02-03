@@ -1,4 +1,4 @@
-#models.py
+# domain/models.py
 
 """
 Domain models configuration for 1min-Gateway.
