@@ -6,7 +6,7 @@ Strictly aligned with 1min.AI 2026 Documentation.
 """
 
 # Complete list of available text/chat models via 1min.ai (Doc 2026)
-ALL_ONE_MIN_AVAILABLE_MODELS = [
+AVAILABLE_MODELS = [
     # alibaba Models
     "qwen3-max",
     "qwen-plus",

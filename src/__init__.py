@@ -12,10 +12,11 @@ from flask import Response, jsonify, make_response, request
 from .adapters.openai_adapter import stream_response, transform_response
 
 # 3. Export de la Configuration
+from .config import ONE_MIN_CONVERSATION_API_URL  # Renommé pour plus de clarté
+from .config import ONE_MIN_FEATURE_API_URL  # Renommé pour plus de clarté
 from .config import (
-    ALL_ONE_MIN_AVAILABLE_MODELS,
-    ONE_MIN_API_URL,
-    ONE_MIN_CONVERSATION_API_STREAMING_URL,
+    AVAILABLE_MODELS,
+    ONE_MIN_ASSET_API_URL,
     PERMIT_MODELS_FROM_SUBSET_ONLY,
     SUBSET_OF_ONE_MIN_PERMITTED_MODELS,
 )

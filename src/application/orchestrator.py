@@ -4,7 +4,7 @@ import logging
 import re
 import uuid
 
-from ..config import ONE_MIN_ASSET_URL
+from ..config import ONE_MIN_ASSET_API_URL
 from ..infrastructure.asset_service import upload_image_to_1min
 from ..infrastructure.one_min_client import create_1min_conversation
 
@@ -32,7 +32,7 @@ def resolve_conversation_context(api_key, model_name, messages, request_data=Non
             elif part.get("type") == "image_url":
                 try:
                     logger.info("ORCHESTRATOR | Détection d'image, tentative d'upload...")
-                    path = upload_image_to_1min(part, asset_headers, ONE_MIN_ASSET_URL)
+                    path = upload_image_to_1min(part, asset_headers, ONE_MIN_ASSET_API_URL)
                     if path:
                         image_paths.append(path)
                         conv_type = "CHAT_WITH_IMAGE"

@@ -1,4 +1,4 @@
-""" Configuration centralisée, typée et validée pour la Gateway 1min.ai."""
+"""Configuration centralisée, typée et validée pour la Gateway 1min.ai."""
 
 import logging
 import os
@@ -80,9 +80,17 @@ APP_PORT: Final[int] = get_validated_port()
 ONE_MIN_BASE_URL: Final[str] = validate_url(
     os.getenv("ONE_MIN_BASE_URL", Defaults.BASE_URL), "BASE_URL"
 )
-ONE_MIN_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/features"
-ONE_MIN_ASSET_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/assets"
-ONE_MIN_CONVERSATION_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/conversations"
+ONE_MIN_FEATURE_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/features"
+ONE_MIN_CONVERSATION_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/conversations"
+ONE_MIN_ASSET_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/assets"
+
+# --- VARIABLES D'ENVIRONNEMENT POUR LES MODÈLES ---
+
+PERMIT_MODELS_FROM_SUBSET_ONLY: Final[bool] = get_bool("PERMIT_MODELS_FROM_SUBSET_ONLY", "false")
+
+SUBSET_OF_ONE_MIN_PERMITTED_MODELS: Final[List[str]] = [
+    m.strip() for m in os.getenv("SUBSET_OF_ONE_MIN_PERMITTED_MODELS", "").split(",") if m.strip()
+]
 
 # --- LOGIQUE DES MODÈLES ---
 

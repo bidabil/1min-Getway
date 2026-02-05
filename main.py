@@ -7,9 +7,9 @@ from waitress import serve
 
 # Import centralisé depuis le package src
 from src import (
-    ALL_ONE_MIN_AVAILABLE_MODELS,
-    ONE_MIN_API_URL,
-    ONE_MIN_CONVERSATION_API_STREAMING_URL,
+    AVAILABLE_MODELS,
+    ONE_MIN_CONVERSATION_API_URL,
+    ONE_MIN_FEATURE_API_URL,
     PERMIT_MODELS_FROM_SUBSET_ONLY,
     SUBSET_OF_ONE_MIN_PERMITTED_MODELS,
     app,
@@ -37,7 +37,7 @@ def list_models():
     """
     # FIX: Passage des arguments requis pour la validation du pipeline
     models = get_formatted_models_list(
-        all_models=ALL_ONE_MIN_AVAILABLE_MODELS,
+        all_models=AVAILABLE_MODELS,
         permit_subset_only=PERMIT_MODELS_FROM_SUBSET_ONLY,
         subset_models=SUBSET_OF_ONE_MIN_PERMITTED_MODELS,
     )
@@ -107,7 +107,7 @@ def conversation():
         # --- 7. Exécution de l'appel ---
         if not is_stream:
             logger.info(f"API_CALL | Mode: Normal | Model: {model_name} | Conv: {context['type']}")
-            res = requests.post(ONE_MIN_API_URL, json=payload, headers=headers, timeout=60)
+            res = requests.post(ONE_MIN_FEATURE_API_URL, json=payload, headers=headers, timeout=60)
             res.raise_for_status()
 
             transformed = transform_response(res.json(), model_name, prompt_token_count)
@@ -116,7 +116,10 @@ def conversation():
         else:
             logger.info(f"API_CALL | Mode: Stream | Model: {model_name} | Conv: {context['type']}")
             res_stream = requests.post(
-                ONE_MIN_CONVERSATION_API_STREAMING_URL, json=payload, headers=headers, stream=True
+                f"{ONE_MIN_FEATURE_API_URL}?isStreaming=true",
+                json=payload,
+                headers=headers,
+                stream=True,
             )
             res_stream.raise_for_status()
 
