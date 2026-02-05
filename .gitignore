@@ -1,37 +1,241 @@
-# --- Secrets & Config ---
-.env
-auth.json
+# ============================================================
+# .gitignore - 1min-Gateway Project
+# ============================================================
+# Configuration complète pour un projet Python moderne
+# Basé sur: https://github.com/github/gitignore/blob/main/Python.gitignore
+# ============================================================
 
-# --- Python & Virtual Environments ---
-.venv/
-env/
-venv/
-ENV/
+# --- SECRETS & CONFIGURATION (CRITIQUE) ---
+.env
+.env.*
+*.env
+!.env.example      # Garder le template
+!.env.local        # Garder le template dev
+auth.json
+*.key
+*.pem
+*.p12
+secrets.yml
+credentials.json
+
+# Baseline de detect-secrets
+.secrets.baseline
+
+# --- PYTHON & VIRTUAL ENVIRONMENTS ---
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+pyvenv.cfg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# --- TESTING & COVERAGE ---
 .pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+.hypothesis/
+nosetests.xml
+coverage.xml
+*.coveragerc
+.cache/
 
-# --- Docker ---
-.docker/
-# On ignore les fichiers de données si tu en as (ex: volumes memcached locaux)
+# --- TYPE CHECKING ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
 
-# --- Logs & Runtime ---
+# --- JUPYTER NOTEBOOK ---
+.ipynb_checkpoints/
+*.ipynb
+
+# --- LOGS & RUNTIME ---
 logs/
 *.log
+*.log.*
 instance/
+.webassets-cache
 
-# --- OS Specific ---
+# --- DOCKER ---
+.docker/
+docker-compose.override.yml
+
+# Volumes de données locaux (si tu montes des volumes)
+# volumes/
+
+# --- OS SPECIFIC ---
+# macOS
 .DS_Store
 .DS_Store?
 ._*
+.AppleDouble
+.LSOverride
 .Spotlight-V100
 .Trashes
-ehthumbs.db
-Thumbs.db
 
-# --- Editors ---
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# --- EDITORS & IDEs ---
+# VSCode
 .vscode/
+*.code-workspace
+
+# JetBrains (PyCharm, IntelliJ, etc.)
 .idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Vim
 *.swp
 *.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# --- CI/CD & DEPLOYMENT ---
+.github/workflows/*.log
+.gitlab-ci-local/
+
+# --- BACKUP FILES ---
+.backup-*/
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.tmp
+*.temp
+
+# --- DATABASE FILES (si tu utilises SQLite en dev) ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- GENERATED FILES ---
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- NODE/NPM (si présent pour outils frontend) ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+.npm
+.yarn/
+
+# --- DOCUMENTATION BUILD ---
+docs/_build/
+docs/.doctrees/
+site/
+
+# --- OTHER TOOLS ---
+.scrapy
+.pybuilder/
+target/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath
+*.sage.py
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# mkdocs
+/site
+
+# mypy
+.mypy_cache/
+
+# Pyre
+.pyre/
+
+# ============================================================
+# PROJECT SPECIFIC
+# ============================================================
+# Ajoute ici des patterns spécifiques à ton projet
+# Exemples:
+# data/raw/
+# models/checkpoints/
+# uploads/

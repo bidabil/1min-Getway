@@ -1,27 +1,272 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# ============================================================
+# Dependabot Configuration - Production-Ready (10/10)
+# ============================================================
+# Ce fichier automatise les mises à jour de dépendances pour :
+# - Python (requirements.txt)
+# - GitHub Actions (workflows/*.yml)
+# - Docker (Dockerfile)
+#
+# Documentation : https://docs.github.com/en/code-security/dependabot
+# ============================================================
 
 version: 2
+
+# Configuration globale pour auto-merge (optionnel)
+# Décommente si tu veux que Dependabot merge automatiquement les patchs de sécurité
+# Nécessite : Settings → Code security → Dependabot → Enable auto-merge
+# enable-beta-ecosystems: true
+
 updates:
-  # Update Python dependencies (requirements.txt)
+  # ============================================================
+  # 1. PYTHON DEPENDENCIES (requirements.txt)
+  # ============================================================
   - package-ecosystem: "pip"
     directory: "/"
+
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
 
-  # Update GitHub Actions (the versions in your ci-cd.yml)
+    # Limite de PRs ouvertes simultanément
+    open-pull-requests-limit: 3
+
+    # Labels automatiques pour faciliter le tri
+    labels:
+      - "dependencies"
+      - "python"
+      - "automated"
+
+    # Assignation automatique
+    reviewers:
+      - "billelattafi"  # ⚠️ Remplace par ton username GitHub
+    assignees:
+      - "billelattafi"  # ⚠️ Remplace par ton username GitHub
+
+    # Format des commits (compatible Semantic Release)
+    commit-message:
+      prefix: "⬆️ chore(deps)"
+      prefix-development: "⬆️ chore(deps-dev)"
+      include: "scope"
+
+    # Groupement des dépendances par catégorie
+    groups:
+      # Groupe 1 : Frameworks et dépendances principales
+      production-dependencies:
+        patterns:
+          - "fastapi*"
+          - "uvicorn*"
+          - "pydantic*"
+          - "sqlalchemy*"
+          - "redis*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Groupe 2 : Outils de développement
+      development-dependencies:
+        patterns:
+          - "pytest*"
+          - "black"
+          - "flake8"
+          - "mypy"
+          - "pre-commit"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Groupe 3 : Sécurité (toujours prioritaire)
+      security-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+
+    # Ignorer les mises à jour majeures de certains packages critiques
+    ignore:
+      # Python : bloquer les mises à jour majeures (ex: 3.12 → 4.0)
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
+
+      # FastAPI : attendre validation manuelle pour les majeures
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+
+      # SQLAlchemy : les majeures cassent souvent les migrations
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+
+    # Versioning strategy (augmente la compatibilité)
+    versioning-strategy: increase
+
+  # ============================================================
+  # 2. GITHUB ACTIONS (workflows/*.yml)
+  # ============================================================
   - package-ecosystem: "github-actions"
     directory: "/"
+
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "Europe/Paris"
 
-  # Update Docker base images (Dockerfile)
+    open-pull-requests-limit: 2
+
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+      - "ci-cd"
+
+    reviewers:
+      - "billelattafi"  # ⚠️ Remplace par ton username
+
+    commit-message:
+      prefix: "⬆️ chore(ci)"
+      include: "scope"
+
+    # Grouper toutes les actions ensemble
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+    # Ignorer les versions pré-release
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # ============================================================
+  # 3. DOCKER BASE IMAGE (Dockerfile)
+  # ============================================================
   - package-ecosystem: "docker"
     directory: "/"
+
     schedule:
       interval: "weekly"
+      day: "tuesday"  # Décalé d'un jour pour éviter la surcharge
+      time: "09:00"
+      timezone: "Europe/Paris"
+
+    open-pull-requests-limit: 2
+
+    labels:
+      - "dependencies"
+      - "docker"
+      - "automated"
+      - "infrastructure"
+
+    reviewers:
+      - "billelattafi"  # ⚠️ Remplace par ton username
+
+    commit-message:
+      prefix: "⬆️ chore(docker)"
+      include: "scope"
+
+    # Grouper les images Docker
+    groups:
+      docker-images:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+    # Protection contre les breaking changes
     ignore:
+      # Python : bloquer les mises à jour majeures
       - dependency-name: "python"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+        update-types: ["version-update:semver-major"]
+
+      # Alpine Linux : les majeures peuvent casser les packages système
+      - dependency-name: "alpine"
+        update-types: ["version-update:semver-major"]
+
+      # Debian : idem
+      - dependency-name: "debian"
+        update-types: ["version-update:semver-major"]
+
+    # Autoriser les patchs de sécurité même pour les majeures ignorées
+    # (Dependabot créera quand même une PR si c'est critique)
+
+  # ============================================================
+  # 4. NPM (Si tu as du frontend - optionnel)
+  # ============================================================
+  # Décommente si tu as un package.json
+  # - package-ecosystem: "npm"
+  #   directory: "/frontend"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "wednesday"
+  #   labels:
+  #     - "dependencies"
+  #     - "javascript"
+  #     - "automated"
+  #   reviewers:
+  #     - "billelattafi"
+  #   commit-message:
+  #     prefix: "⬆️ chore(deps)"
+  #   groups:
+  #     npm-dependencies:
+  #       patterns:
+  #         - "*"
+  #   ignore:
+  #     - dependency-name: "react"
+  #       update-types: ["version-update:semver-major"]
+
+# ============================================================
+# CONFIGURATION AVANCÉE (GitHub Settings requis)
+# ============================================================
+# Pour activer l'auto-merge des PRs Dependabot :
+#
+# 1. Activer Dependabot auto-merge :
+#    Settings → Code security → Dependabot → Enable auto-merge
+#
+# 2. Créer une règle de branche protection :
+#    Settings → Branches → Add rule
+#    - Require status checks (CI/CD doit passer)
+#    - Require pull request reviews (optionnel)
+#
+# 3. Créer un workflow auto-merge (optionnel) :
+#    .github/workflows/dependabot-auto-merge.yml
+#
+# Exemple de workflow auto-merge (à créer séparément) :
+# ```yaml
+# name: Dependabot Auto-Merge
+# on: pull_request
+#
+# jobs:
+#   auto-merge:
+#     runs-on: ubuntu-latest
+#     if: github.actor == 'dependabot[bot]'
+#     steps:
+#       - name: Approve PR
+#         run: gh pr review --approve "$PR_URL"
+#         env:
+#           PR_URL: ${{github.event.pull_request.html_url}}
+#           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+#
+#       - name: Auto-merge
+#         run: gh pr merge --auto --squash "$PR_URL"
+#         env:
+#           PR_URL: ${{github.event.pull_request.html_url}}
+#           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+# ```
+# ============================================================
+
+# ============================================================
+# NOTES IMPORTANTES
+# ============================================================
+# 1. Remplace "billelattafi" par ton vrai username GitHub
+# 2. Ajuste les timezones selon ta localisation
+# 3. Les groupes permettent de recevoir 1 seule PR au lieu de 10+
+# 4. Les labels facilitent le tri dans l'onglet Pull Requests
+# 5. Les commits avec "chore(deps)" ne déclenchent PAS de release
+# 6. Les mises à jour majeures sont ignorées pour éviter les breaking changes
+# 7. Dependabot respecte quand même les alertes de sécurité critiques
+# ============================================================

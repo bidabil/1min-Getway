@@ -1,33 +1,45 @@
-# Use a slim version of Python 3.12 for a small and secure image
-FROM python:3.12-slim
+# --- STAGE 1: Builder ---
+FROM python:3.12-slim AS builder
 
-# Prevent Python from writing .pyc files and ensure logs are sent straight to terminal
+# Désactiver le cache pip pour gagner de la place et éviter les fichiers .pyc
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies
-# build-essential is required for compiling some heavy-duty tokenizers (tiktoken, etc.)
+# On installe build-essential uniquement ici pour compiler les dépendances (tiktoken, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && rm -rf /var/lib/apt/lists/*
 
-# Leverage Docker cache: install requirements before copying the source code
+# Installation des dépendances dans un dossier utilisateur pour faciliter le transfert
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --user --no-cache-dir -r requirements.txt
 
-# Copy the entire project into the container
+
+# --- STAGE 2: Runtime (Image finale) ---
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PATH=/root/.local/bin:$PATH
+
+WORKDIR /app
+
+# On récupère uniquement les bibliothèques compilées de l'étape précédente
+COPY --from=builder /root/.local /root/.local
+
+# Copie du code source
 COPY . .
 
-# Create the logs directory and set permissions
-# This ensures the container can write logs even when mounted as a volume
+# Gestion des logs (création du dossier et permissions)
 RUN mkdir -p logs && chmod 777 logs
 
-# Expose the internal port used by the Flask application
+# Expose le port de l'application
 EXPOSE 5001
 
-# Run the application
-# We use python main.py as the entry point
+# Utilisation d'un utilisateur non-root pour la sécurité (optionnel mais conseillé)
+# RUN useradd -m appuser && chown -R appuser /app
+# USER appuser
+
 CMD ["python", "main.py"]
