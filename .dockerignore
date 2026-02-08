@@ -84,8 +84,6 @@ dmypy.json
 *.md
 !README.md  # Garder le README si tu veux le voir dans l'image
 docs/
-*.txt
-!requirements.txt  # ⚠️ IMPORTANT: Garder requirements.txt
 
 # --- IDE & EDITORS ---
 .vscode/
