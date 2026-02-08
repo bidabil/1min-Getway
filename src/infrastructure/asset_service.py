@@ -1,3 +1,5 @@
+# src/infrastructure/asset_service.py
+
 """ Module de gestion des ressources (assets) pour la Gateway 1min.
 Gère le téléchargement, le décodage et l'upload d'images.
 """
@@ -12,7 +14,7 @@ import requests
 
 # Standardized logger
 logger = logging.getLogger("1min-gateway.asset-service")
-MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_IMAGE_SIZE = 50 * 1024 * 1024  # 50 MB
 
 
 def _decode_base64_image(image_data):
@@ -48,7 +50,7 @@ def _download_external_image(url):
         if chunk:
             buf.extend(chunk)
             if len(buf) > MAX_IMAGE_SIZE:
-                raise ValueError("Image too large")
+                raise ValueError("FILE_TOO_LARGE_413")
 
     return bytes(buf), response.headers.get("Content-Type")
 
@@ -92,6 +94,14 @@ def upload_image_to_1min(item, headers, asset_url):
         body = asset_response.json()
         return body["fileContent"]["path"]
 
+    except ValueError as e:
+        if str(e) == "FILE_TOO_LARGE_413":
+            logger.error("ASSET | Fichier trop volumineux (> 50MB)")
+            # Relancer avec message clair
+            raise ValueError("File size exceeds 50MB limit")
+        else:
+            logger.error("Failed to process image: %s", str(e))
+            raise
     except Exception as e:
         logger.error("Failed to process image: %s", str(e))
         raise

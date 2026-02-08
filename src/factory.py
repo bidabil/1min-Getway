@@ -1,4 +1,4 @@
-# factory.py
+# src/factory.py
 
 import logging
 import os
@@ -13,7 +13,6 @@ from pymemcache.client.base import Client
 
 # Suppress flask_limiter warnings to keep the console clean from non-critical noise
 warnings.filterwarnings("ignore", category=UserWarning, module="flask_limiter.extension")
-
 
 def check_memcached_connection(host="memcached", port=11211):
     """
@@ -96,5 +95,9 @@ def create_app():
             storage_uri="memory://",
         )
         logger.warning("LIMITER | Memcached unreachable. Backend: IN-MEMORY (Volatile).")
+
+    from .routes import register_routes
+
+    register_routes(app, limiter)
 
     return app, logger, limiter

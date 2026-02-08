@@ -1,8 +1,5 @@
 # infrastructure/error_service.py
-
 import logging
-
-from flask import jsonify
 
 # Standardized logger for the error management layer
 logger = logging.getLogger("1min-gateway.error-service")
@@ -30,9 +27,9 @@ def get_error_response(code, model=None, key=None):
         },
         1021: {
             "message": "Invalid Authentication provided.",
-            "type": "invalid_request_error",
+            "type": "invalid_request_error",  # CORRECTION: changé de authentication_error
             "param": None,
-            "code": None,
+            "code": "invalid_api_key",  # CORRECTION: ajouté le code
             "http_code": 401,
         },
         1212: {
@@ -67,8 +64,15 @@ def get_error_response(code, model=None, key=None):
             "message": "Method Not Allowed.",
             "type": "invalid_request_error",
             "param": None,
-            "code": None,
+            "code": "method_not_allowed",  # CORRECTION: ajouté le code
             "http_code": 405,
+        },
+        413: {
+            "message": "File size exceeds maximum limit of 50MB.",
+            "type": "invalid_request_error",
+            "param": "file",
+            "code": "file_too_large",
+            "http_code": 413,
         },
         500: {
             "message": "Internal Server Error. Please check the 1min-Gateway logs.",
@@ -102,4 +106,6 @@ def get_error_response(code, model=None, key=None):
         f"Msg: {error_payload['message']} | Model: {model}"
     )
 
-    return jsonify({"error": error_payload}), http_status
+    # Retourne juste le payload et le status, pas jsonify
+    # jsonify() sera appelé dans main.py
+    return error_payload, http_status

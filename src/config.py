@@ -1,3 +1,5 @@
+# src/config.py
+
 """Configuration centralisée, typée et validée pour la Gateway 1min.ai."""
 
 import logging

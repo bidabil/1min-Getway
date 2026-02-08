@@ -1,3 +1,5 @@
+# src/infrastructure/__init__.py
+
 """Package Infrastructure de la Gateway 1min.
 
 Expose les services essentiels pour l'interaction avec les APIs externes.
