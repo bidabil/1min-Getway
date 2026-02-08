@@ -1,0 +1,256 @@
+name: Dependabot Auto-Merge (Fixed)
+
+# ============================================================
+# Ce workflow automatise l'approbation et le merge des PRs Dependabot
+# selon des règles de sécurité strictes
+#
+# FIX: checkName changé de "build-and-push" à "test"
+# Raison: build-and-push est skippé sur les PRs Dependabot
+# ============================================================
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ============================================================
+  # JOB 1: Vérifier si la PR vient de Dependabot
+  # ============================================================
+  check-dependabot:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    outputs:
+      is-dependabot: ${{ steps.check.outputs.is-dependabot }}
+      update-type: ${{ steps.metadata.outputs.update-type }}
+      dependency-type: ${{ steps.metadata.outputs.dependency-type }}
+      dependency-names: ${{ steps.metadata.outputs.dependency-names }}
+
+    steps:
+      - name: Check if PR is from Dependabot
+        id: check
+        run: |
+          echo "is-dependabot=true" >> $GITHUB_OUTPUT
+
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display PR info
+        run: |
+          echo "🤖 Dependabot PR detected"
+          echo "📦 Update type: ${{ steps.metadata.outputs.update-type }}"
+          echo "🏷️ Dependency type: ${{ steps.metadata.outputs.dependency-type }}"
+          echo "📋 Dependency names: ${{ steps.metadata.outputs.dependency-names }}"
+
+  # ============================================================
+  # JOB 2: Auto-approve et merge selon les règles
+  # ============================================================
+  auto-merge:
+    needs: check-dependabot
+    runs-on: ubuntu-latest
+    if: |
+      github.actor == 'dependabot[bot]' &&
+      needs.check-dependabot.outputs.is-dependabot == 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ============================================================
+      # FIX CRITIQUE: Attendre le job "test" au lieu de "build-and-push"
+      # ============================================================
+      - name: Wait for Test CI checks
+        uses: fountainhead/action-wait-for-check@v1.2.0
+        id: wait-for-tests
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: "test"  # ✅ CORRIGÉ: "test" existe toujours sur les PRs
+          ref: ${{ github.event.pull_request.head.sha }}
+          timeoutSeconds: 1800  # 30 minutes max
+
+      - name: Test Status
+        run: |
+          echo "✅ Test Status: ${{ steps.wait-for-tests.outputs.conclusion }}"
+
+      # Optionnel: Attendre aussi le build de validation (si configuré)
+      - name: Wait for Build Validation (PR only)
+        uses: fountainhead/action-wait-for-check@v1.2.0
+        id: wait-for-build
+        continue-on-error: true  # Ne pas bloquer si ce job n'existe pas
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: "build-validation"
+          ref: ${{ github.event.pull_request.head.sha }}
+          timeoutSeconds: 900  # 15 minutes max
+
+      - name: Build Validation Status
+        if: steps.wait-for-build.outcome == 'success'
+        run: |
+          echo "🐳 Build Validation Status: ${{ steps.wait-for-build.outputs.conclusion }}"
+
+      # ============================================================
+      # RÈGLE 1 : Auto-merge des patchs de sécurité (toujours)
+      # ============================================================
+      - name: Auto-approve security patches
+        if: |
+          steps.wait-for-tests.outputs.conclusion == 'success' &&
+          needs.check-dependabot.outputs.update-type == 'version-update:semver-patch'
+        run: |
+          echo "✅ Security patch detected - Auto-approving"
+          gh pr review --approve "${{ github.event.pull_request.html_url }}"
+          gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ============================================================
+      # RÈGLE 2 : Auto-approve des mises à jour mineures (dev deps)
+      # ============================================================
+      - name: Auto-approve minor updates (dev dependencies)
+        if: |
+          steps.wait-for-tests.outputs.conclusion == 'success' &&
+          needs.check-dependabot.outputs.update-type == 'version-update:semver-minor' &&
+          needs.check-dependabot.outputs.dependency-type == 'direct:development'
+        run: |
+          echo "✅ Minor dev dependency update - Auto-approving"
+          gh pr review --approve "${{ github.event.pull_request.html_url }}"
+          gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ============================================================
+      # RÈGLE 3 : Auto-approve des patchs production (avec prudence)
+      # ============================================================
+      - name: Auto-approve production patches (with caution)
+        if: |
+          steps.wait-for-tests.outputs.conclusion == 'success' &&
+          needs.check-dependabot.outputs.update-type == 'version-update:semver-patch' &&
+          needs.check-dependabot.outputs.dependency-type == 'direct:production'
+        run: |
+          echo "✅ Production patch update - Auto-approving"
+          echo "📦 Dependencies: ${{ needs.check-dependabot.outputs.dependency-names }}"
+          gh pr review --approve "${{ github.event.pull_request.html_url }}"
+          gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ============================================================
+      # RÈGLE 4 : Approuver (mais pas merge) les mises à jour mineures prod
+      # ============================================================
+      - name: Approve but don't merge minor production updates
+        if: |
+          steps.wait-for-tests.outputs.conclusion == 'success' &&
+          needs.check-dependabot.outputs.update-type == 'version-update:semver-minor' &&
+          needs.check-dependabot.outputs.dependency-type == 'direct:production'
+        run: |
+          echo "⚠️ Minor production update - Approving but NOT auto-merging"
+          echo "👀 Manual review recommended"
+          gh pr review --approve "${{ github.event.pull_request.html_url }}" \
+            --body "✅ CI passed, but this is a minor production dependency update. Please review manually before merging.\n\n📦 Updated: ${{ needs.check-dependabot.outputs.dependency-names }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ============================================================
+      # RÈGLE 5 : Approuver (mais pas merge) les majeures
+      # ============================================================
+      - name: Approve but don't merge major updates
+        if: |
+          steps.wait-for-tests.outputs.conclusion == 'success' &&
+          needs.check-dependabot.outputs.update-type == 'version-update:semver-major'
+        run: |
+          echo "⚠️ Major update detected - Approving but NOT auto-merging"
+          echo "👀 Manual review REQUIRED"
+          gh pr review --approve "${{ github.event.pull_request.html_url }}" \
+            --body "⚠️ **MAJOR VERSION UPDATE**\n\nCI passed, but this is a major version update that may contain breaking changes.\n\n📦 Updated: ${{ needs.check-dependabot.outputs.dependency-names }}\n\n**Action required:**\n- [ ] Review breaking changes in release notes\n- [ ] Test locally\n- [ ] Update code if necessary\n- [ ] Merge manually when ready"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ============================================================
+      # RÈGLE 6 : Bloquer si les tests échouent
+      # ============================================================
+      - name: Block if CI fails
+        if: steps.wait-for-tests.outputs.conclusion != 'success'
+        run: |
+          echo "❌ CI checks failed - Not approving"
+          gh pr comment "${{ github.event.pull_request.html_url }}" \
+            --body "❌ **CI checks failed**\n\nThis PR will not be auto-merged. Please investigate the test failures:\n\n- Test status: ${{ steps.wait-for-tests.outputs.conclusion }}\n- Build status: ${{ steps.wait-for-build.outputs.conclusion || 'N/A' }}\n\nFix the issues and push again to re-trigger the checks."
+          exit 1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================
+  # JOB 3: Notification & Summary
+  # ============================================================
+  notify:
+    needs: [check-dependabot, auto-merge]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Determine status
+        id: status
+        run: |
+          if [[ "${{ needs.auto-merge.result }}" == "success" ]]; then
+            echo "message=✅ Dependabot PR auto-merged successfully" >> $GITHUB_OUTPUT
+            echo "emoji=🎉" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.auto-merge.result }}" == "failure" ]]; then
+            echo "message=❌ Dependabot PR failed checks" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          else
+            echo "message=⏸️ Dependabot PR requires manual review" >> $GITHUB_OUTPUT
+            echo "emoji=👀" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Summary
+        run: |
+          echo "${{ steps.status.outputs.emoji }} ${{ steps.status.outputs.message }}"
+          echo "PR: ${{ github.event.pull_request.html_url }}"
+          echo "Update type: ${{ needs.check-dependabot.outputs.update-type }}"
+          echo "Dependency type: ${{ needs.check-dependabot.outputs.dependency-type }}"
+
+      # Décommente pour envoyer des notifications Slack
+      # - name: Slack notification
+      #   uses: slackapi/slack-github-action@v1
+      #   if: needs.auto-merge.result == 'failure'
+      #   with:
+      #     webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #     payload: |
+      #       {
+      #         "text": "${{ steps.status.outputs.emoji }} Dependabot: ${{ steps.status.outputs.message }}",
+      #         "blocks": [
+      #           {
+      #             "type": "section",
+      #             "text": {
+      #               "type": "mrkdwn",
+      #               "text": "*PR:* <${{ github.event.pull_request.html_url }}|${{ github.event.pull_request.title }}>\n*Status:* ${{ steps.status.outputs.message }}\n*Update:* ${{ needs.check-dependabot.outputs.update-type }}"
+      #             }
+      #           }
+      #         ]
+      #       }
+
+# ============================================================
+# CONFIGURATION REQUISE
+# ============================================================
+# 1. Activer "Allow auto-merge" dans Settings → General
+# 2. Configurer branch protection sur 'main' :
+#    - Require status checks: "test" (et optionnellement "build-validation")
+#    - Require approvals : 1 (satisfait par ce workflow)
+# 3. (Optionnel) Ajouter SLACK_WEBHOOK_URL dans les secrets
+#
+# RÈGLES D'AUTO-MERGE:
+# ✅ Auto-merge: Patchs (patch) - dev et prod
+# ✅ Auto-merge: Minor (minor) - dev uniquement
+# ⏸️ Approve only: Minor (minor) - prod
+# ⏸️ Approve only: Major (major) - tous
+# ❌ Block: CI fails
+#
+# SÉCURITÉ :
+# - Ce workflow n'auto-merge QUE si les tests passent
+# - Les mises à jour de production mineures/majeures nécessitent une review
+# - Les patchs de sécurité sont mergés immédiatement
+# ============================================================

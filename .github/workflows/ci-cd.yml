@@ -1,4 +1,4 @@
-name: 1min-Gateway CI/CD
+name: 1min-Gateway CI/CD (Production-Ready)
 
 on:
   push:
@@ -11,9 +11,51 @@ env:
   GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
 
 jobs:
-  # --- JOB 1: RELEASE (Calculates version based on commits) ---
-  release:
+  # ============================================================
+  # JOB 0: TESTS (La fondation - Always run)
+  # ============================================================
+  test:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt pytest pytest-cov
+
+      - name: Run Tests with Coverage
+        run: |
+          pytest --cov=. --cov-report=term-missing --cov-report=xml
+
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  # ============================================================
+  # JOB 1: RELEASE (Only on main branch)
+  # ============================================================
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     permissions:
       contents: write
       issues: write
@@ -21,108 +63,233 @@ jobs:
     outputs:
       new_release_published: ${{ steps.semantic.outputs.new_release_published }}
       new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0  # Important pour semantic-release
 
       - name: Semantic Release
         id: semantic
-        uses: cycjimmy/semantic-release-action@v6
+        uses: cycjimmy/semantic-release-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # --- JOB 2: BUILD AND PUSH (Triggered after release) ---
+      - name: Release Summary
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          echo "🎉 New release published: v${{ steps.semantic.outputs.new_release_version }}"
+          echo "📦 Release notes: ${{ steps.semantic.outputs.new_release_notes }}"
+
+  # ============================================================
+  # JOB 2: BUILD VALIDATION (For Pull Requests)
+  # ============================================================
+  build-validation:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (validation only)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          tags: ${{ env.IMAGE_NAME }}:pr-${{ github.event.pull_request.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: PR Build Success
+        run: |
+          echo "✅ Docker build successful for PR #${{ github.event.pull_request.number }}"
+          echo "Image would be tagged as: ${{ env.IMAGE_NAME }}:pr-${{ github.event.pull_request.number }}"
+
+  # ============================================================
+  # JOB 3: BUILD, SCAN & PUSH (Production deployment)
+  # ============================================================
   build-and-push:
     needs: release
     runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'pull_request' &&
+      needs.release.outputs.new_release_published == 'true'
     permissions:
       contents: read
       packages: write
       id-token: write
+      security-events: write  # Pour Trivy SARIF upload
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      # --- STEP 1: TEST PHASE ---
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12.3'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Run automated tests
-        run: |
-          export PYTHONPATH=$PYTHONPATH:.
-          python -m pytest
-
-      # --- STEP 2: PREPARATION ---
-      - name: Install Cosign
-        if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v4.0.0
-
-      - name: Set up QEMU
+      - name: Set up QEMU (Multi-architecture support)
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # --- STEP 3: REGISTRY AUTHENTICATION ---
+      # --- AUTHENTICATION ---
       - name: Login to Docker Hub
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Login to GHCR
-        if: github.event_name != 'pull_request'
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- STEP 4: BUILD AND DEPLOY ---
+      # --- METADATA EXTRACTION ---
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            docker.io/${{ env.IMAGE_NAME }}
+            ${{ env.IMAGE_NAME }}
             ghcr.io/${{ env.GHCR_IMAGE }}
           tags: |
-            # Keep latest for Watchtower
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            # Add the new version tag if a release is published (e.g., v1.1.0)
-            type=raw,value=${{ needs.release.outputs.new_release_version }},enable=${{ needs.release.outputs.new_release_published == 'true' }}
-            type=sha
+            type=raw,value=latest,enable=true
+            type=semver,pattern={{version}},value=${{ needs.release.outputs.new_release_version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.new_release_version }}
+            type=semver,pattern={{major}},value=${{ needs.release.outputs.new_release_version }}
+            type=sha,prefix={{branch}}-,format=short,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@v6
+      # --- BUILD FOR SECURITY SCAN (AMD64 only, faster) ---
+      - name: Build image for security scan
+        uses: docker/build-push-action@v5
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          load: true
+          platforms: linux/amd64
+          tags: ${{ env.IMAGE_NAME }}:scan-temp
+          cache-from: type=gha
+
+      # --- SECURITY SCAN (BEFORE PUSH) ---
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan-temp
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'  # Fail if critical vulnerabilities found
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Trivy scan summary
+        if: success()
+        run: |
+          echo "✅ Security scan passed - No critical vulnerabilities found"
+          echo "🔍 Detailed results available in Security tab"
+
+      # --- MULTI-ARCH BUILD & PUSH (Only if scan passed) ---
+      - name: Build and push multi-architecture images
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true  # Generate Software Bill of Materials
 
-      # --- STEP 5: SECURITY SIGNING ---
-      - name: Sign the published Docker images
-        if: github.event_name != 'pull_request' && needs.release.outputs.new_release_published == 'true'
+      # --- IMAGE SIGNING ---
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.4.0
+
+      - name: Sign Docker images
         env:
+          COSIGN_EXPERIMENTAL: 1  # Keyless signing mode
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: |
-          for tag in ${TAGS// / }; do
-            cosign sign --yes ${tag}@${DIGEST}
+          echo "🔐 Signing images with Cosign..."
+          for tag in ${TAGS}; do
+            echo "Signing: ${tag}@${DIGEST}"
+            cosign sign --yes "${tag}@${DIGEST}"
           done
+
+      - name: Deployment Summary
+        run: |
+          echo "🚀 Deployment successful!"
+          echo "📦 Version: v${{ needs.release.outputs.new_release_version }}"
+          echo "🏷️  Tags pushed:"
+          echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n'
+          echo "🔒 Images signed with Cosign"
+          echo "📊 SBOM generated"
+
+  # ============================================================
+  # JOB 4: NOTIFICATIONS (Optional - runs always)
+  # ============================================================
+  notify:
+    needs: [test, release, build-and-push]
+    runs-on: ubuntu-latest
+    if: always() && github.event_name != 'pull_request'
+
+    steps:
+      - name: Determine status
+        id: status
+        run: |
+          if [[ "${{ needs.build-and-push.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=🎉" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.build-and-push.result }}" == "failure" ]]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+          else
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            echo "emoji=⏭️" >> $GITHUB_OUTPUT
+            echo "color=warning" >> $GITHUB_OUTPUT
+          fi
+
+      # Uncomment and configure if you want Slack notifications
+      # - name: Slack Notification
+      #   uses: slackapi/slack-github-action@v1
+      #   if: always()
+      #   with:
+      #     webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #     payload: |
+      #       {
+      #         "text": "${{ steps.status.outputs.emoji }} 1min-Gateway CI/CD",
+      #         "blocks": [
+      #           {
+      #             "type": "section",
+      #             "text": {
+      #               "type": "mrkdwn",
+      #               "text": "*Status:* ${{ steps.status.outputs.status }}\n*Version:* ${{ needs.release.outputs.new_release_version }}\n*Commit:* <${{ github.event.head_commit.url }}|${{ github.sha }}>"
+      #             }
+      #           }
+      #         ]
+      #       }
+
+      - name: Build report
+        run: |
+          echo "📊 CI/CD Pipeline Report"
+          echo "========================"
+          echo "Tests: ${{ needs.test.result }}"
+          echo "Release: ${{ needs.release.result }}"
+          echo "Build & Push: ${{ needs.build-and-push.result }}"
+          echo "Overall Status: ${{ steps.status.outputs.status }}"

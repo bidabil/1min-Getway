@@ -1,0 +1,14 @@
+# src/infrastructure/__init__.py
+
+"""Package Infrastructure de la Gateway 1min.
+
+Expose les services essentiels pour l'interaction avec les APIs externes.
+"""
+
+from .asset_service import upload_image_to_1min
+from .one_min_client import create_1min_conversation
+
+__all__ = [
+    "create_1min_conversation",
+    "upload_image_to_1min",
+]

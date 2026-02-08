@@ -1,54 +1,200 @@
-version: '3.8'
+# ============================================================
+# Docker Compose - 1min-Gateway Production Setup
+# ============================================================
+# Architecture: Gateway + Memcached + Watchtower
+# Network: Bridge isolé pour sécurité
+# ============================================================
 
 services:
-  # --- WATCHTOWER SERVICE ---
+  # ============================================================
+  # WATCHTOWER - Auto-update des containers
+  # ============================================================
   watchtower:
-    image: containrrr/watchtower
+    image: containrrr/watchtower:latest
     container_name: watchtower
     restart: unless-stopped
+
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
     environment:
+      # Intervalle de vérification (5 minutes)
       - WATCHTOWER_POLL_INTERVAL=300
+
+      # Nettoyer les anciennes images
       - WATCHTOWER_CLEANUP=true
+
+      # Activer le mode label (seuls les containers marqués sont mis à jour)
       - WATCHTOWER_LABEL_ENABLE=true
+
+      # Authentification Docker Hub (pour images privées)
       - REPO_USER=${DOCKER_USER}
       - REPO_PASS=${DOCKER_TOKEN}
+
+      # Notifications (optionnel - décommente si tu veux des notifications)
+      # - WATCHTOWER_NOTIFICATIONS=slack
+      # - WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL=${SLACK_WEBHOOK_URL}
+
+      # Logs plus détaillés
+      - WATCHTOWER_DEBUG=false
+      - WATCHTOWER_TRACE=false
+
+      # Run une seule fois puis exit (désactiver pour mode continu)
+      # - WATCHTOWER_RUN_ONCE=false
+
     networks:
       - 1min-gateway-network
 
-  # Memcached: High-performance memory caching for Rate Limiting
+    # Resource limits (Watchtower est léger)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+  # ============================================================
+  # MEMCACHED - Cache en mémoire pour rate limiting
+  # ============================================================
   memcached:
-    image: memcached:alpine # Using Alpine for a smaller footprint
+    image: memcached:1.6-alpine  # ✅ Version pinnée
     container_name: 1min-gateway-cache
-    networks:
-      - 1min-gateway-network
+
+    # Commande avec options optimisées
+    command:
+      - "memcached"
+      - "-m 64"              # Limite mémoire: 64 MB
+      - "-c 1024"            # Max connections: 1024
+      - "-I 4m"              # Max item size: 4 MB
+      - "-v"                 # Verbose logging
+
     restart: unless-stopped
 
-  # 1min-Gateway: Core Relay Service
+    networks:
+      - 1min-gateway-network
+
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "sh", "-c", "echo stats | nc localhost 11211"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+
+  # ============================================================
+  # 1MIN-GATEWAY - Service principal
+  # ============================================================
   1min-gateway:
     image: billelattafi/1min-gateway:latest
     container_name: 1min-gateway-container
-    # WATCHTOWER LABEL
+
+    # Labels Watchtower
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.monitor-only=false"
+
+    # Ports exposés
     ports:
       - "5001:5001"
+
+    # Dépendances (attend que memcached soit healthy)
     depends_on:
-      - memcached
+      memcached:
+        condition: service_healthy
+
+    # Réseau
     networks:
       - 1min-gateway-network
+
+    # Variables d'environnement
     env_file:
       - .env
+
     environment:
-      # These environment variables can override the .env file if defined here
+      # Override des variables si nécessaire
       - SUBSET_OF_ONE_MIN_PERMITTED_MODELS=${SUBSET_OF_ONE_MIN_PERMITTED_MODELS:-mistral-nemo,gpt-4o-mini,deepseek-chat}
       - PERMIT_MODELS_FROM_SUBSET_ONLY=${PERMIT_MODELS_FROM_SUBSET_ONLY:-False}
+
+      # Configuration memcached
+      - MEMCACHED_HOST=memcached
+      - MEMCACHED_PORT=11211
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+    # Volumes (persistence des logs)
     volumes:
-      # Persistence: Ensures your logs survive container updates
       - ./logs:/app/logs
+
+    # Healthcheck (utilise l'endpoint racine /)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/', timeout=2)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s  # Temps de démarrage initial
+
+    # Restart policy
     restart: unless-stopped
 
+    # Resource limits (ajuste selon tes besoins)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'        # Max 2 cores
+          memory: 1G         # Max 1 GB RAM
+        reservations:
+          cpus: '0.5'        # Min 0.5 core
+          memory: 256M       # Min 256 MB RAM
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"      # Rotation à 10 MB
+        max-file: "3"        # Garder 3 fichiers
+        compress: "true"     # Compression
+
+# ============================================================
+# NETWORKS
+# ============================================================
 networks:
   1min-gateway-network:
     driver: bridge
+    name: 1min-gateway-network
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1
+
+# ============================================================
+# VOLUMES (optionnel - pour persistence memcached)
+# ============================================================
+# volumes:
+#   memcached-data:
+#     driver: local
+
+# ============================================================
+# NOTES D'UTILISATION
+# ============================================================
+# Lancer : docker compose up -d
+# Logs   : docker compose logs -f 1min-gateway
+# Stop   : docker compose down
+# Rebuild: docker compose up -d --build --force-recreate
+#
+# Watchtower vérifie les updates toutes les 5 minutes
+# Les logs sont persistés dans ./logs
+# ============================================================

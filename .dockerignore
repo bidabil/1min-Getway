@@ -1,5 +1,160 @@
+# ============================================================
+# .dockerignore - Optimisation du contexte Docker
+# ============================================================
+# Ce fichier réduit la taille du contexte de build Docker
+# en excluant les fichiers inutiles au runtime.
+# ============================================================
+
+# --- SECRETS & CONFIGURATION (CRITIQUE) ---
 .env
-__pycache__
-*.pyc
-venv
-.git
+.env.*
+*.env
+!.env.example  # Garder le template
+auth.json
+*.key
+*.pem
+*.p12
+
+# --- PYTHON CACHE & BUILD ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+develop-eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg
+
+# --- VIRTUAL ENVIRONMENTS ---
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# --- GIT ---
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# --- CI/CD & CONFIGURATION ---
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
+.circleci/
+.releaserc.json
+commitlint.config.js
+.pre-commit-config.yaml
+
+# --- TESTING ---
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+.hypothesis/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.coveragerc
+
+# --- TYPE CHECKING ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# --- DOCUMENTATION ---
+*.md
+!README.md  # Garder le README si tu veux le voir dans l'image
+docs/
+
+# --- IDE & EDITORS ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# --- OS FILES ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# --- LOGS ---
+logs/
+*.log
+*.log.*
+
+# --- DOCKER FILES ---
+docker-compose*.yml
+!docker-compose.yml  # Garder si tu veux build depuis le compose
+Dockerfile.*
+!Dockerfile  # Garder le Dockerfile principal
+.dockerignore
+
+# --- DEVELOPMENT TOOLS ---
+Makefile
+setup.py
+setup.cfg
+pyproject.toml  # Sauf si tu l'utilises pour installer le package
+
+# --- BACKUP & TEMPORARY FILES ---
+.backup-*/
+*.bak
+*.tmp
+*.temp
+.cache/
+
+# --- SECURITY TOOLS ---
+.secrets.baseline
+.bandit
+.safety
+
+# --- NODE/NPM (si présent) ---
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# --- AUTRES ---
+.editorconfig
+.eslintrc*
+.prettierrc*
+.stylelintrc*
+
+# ============================================================
+# EXCEPTIONS (fichiers à GARDER dans le build)
+# ============================================================
+# Utilise le pattern !filename pour forcer l'inclusion
+# Exemples déjà présents ci-dessus:
+# !requirements.txt
+# !README.md
+# ============================================================
