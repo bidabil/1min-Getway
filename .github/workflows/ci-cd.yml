@@ -1,13 +1,12 @@
 
-# ============================================================
+# ==============================================================
 # CI/CD Pipeline - 1min-Gateway (Production-Ready v2.0)
-# ============================================================
-# Changements majeurs:
-# - Ruff remplace Black+Flake8+isort+Bandit (cohérent avec pre-commit)
-# - Versions d'actions mises à jour
-# - Cache partagé entre jobs
-# - Coverage cohérent avec pyproject.toml
-# ============================================================
+# ==============================================================
+# - Ruff replaces Black+Flake8+isort+Bandit
+# - Updated action versions
+# - Shared cache between jobs
+# - Coverage consistent with pyproject.toml
+# ==============================================================
 
 name: 1min-Gateway CI/CD
 
@@ -21,18 +20,15 @@ env:
   IMAGE_NAME: billelattafi/1min-gateway
   GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
   PYTHON_VERSION: "3.12"
-  RUFF_VERSION: "0.8.0"  # Versionné pour reproductibilité
+  RUFF_VERSION: "0.8.0"
 
-# ============================================================
-# Permissions minimales par défaut (sécurité)
-# ============================================================
 permissions:
   contents: read
 
 jobs:
-  # ============================================================
-  # JOB 0: LINT & FORMAT (Rapide, bloque tôt)
-  # ============================================================
+  # ==============================================================
+  # JOB 0: LINT & FORMAT
+  # ==============================================================
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -47,15 +43,15 @@ jobs:
       - name: Install Ruff
         run: pip install ruff==${{ env.RUFF_VERSION }}
 
-      - name: Ruff Lint (includes security rules)
+      - name: Ruff Lint
         run: ruff check . --output-format=github
 
       - name: Ruff Format Check
         run: ruff format --check --diff .
 
-  # ============================================================
-  # JOB 1: TESTS (Parallèle avec lint)
-  # ============================================================
+  # ==============================================================
+  # JOB 1: TESTS
+  # ==============================================================
   test:
     runs-on: ubuntu-latest
     steps:
@@ -70,8 +66,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest pytest-cov
 
       - name: Run Tests with Coverage
         run: |
@@ -89,13 +86,13 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  # ============================================================
-  # JOB 2: SECURITY SCAN (Code + Dependencies)
-  # ============================================================
+  # ==============================================================
+  # JOB 2: SECURITY SCAN
+  # ==============================================================
   security:
     runs-on: ubuntu-latest
     permissions:
-      security-events: write  # Pour upload SARIF
+      security-events: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -105,22 +102,20 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      # Ruff avec règles de sécurité (S = Bandit rules)
       - name: Security Lint (Ruff + Bandit rules)
         run: |
           pip install ruff==${{ env.RUFF_VERSION }}
           ruff check . --select S --output-format=github
 
-      # Scan des dépendances
       - name: Dependency Security Scan
         uses: pyupio/safety-action@v1
-        continue-on-error: true  # Ne pas bloquer si advisory DB down
+        continue-on-error: true
         with:
           api-key: ${{ secrets.SAFETY_API_KEY }}
 
-  # ============================================================
+  # ==============================================================
   # JOB 3: RELEASE (Semantic Release)
-  # ============================================================
+  # ==============================================================
   release:
     needs: [lint, test, security]
     runs-on: ubuntu-latest
@@ -152,9 +147,9 @@ jobs:
           echo "🎉 New release: v${{ steps.semantic.outputs.new_release_version }}"
           echo "## 🚀 Release v${{ steps.semantic.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
 
-  # ============================================================
+  # ==============================================================
   # JOB 4: BUILD VALIDATION (Pull Requests only)
-  # ============================================================
+  # ==============================================================
   build-validation:
     needs: [lint, test]
     runs-on: ubuntu-latest
@@ -180,9 +175,9 @@ jobs:
       - name: Build Summary
         run: echo "✅ Docker build successful for PR #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
 
-  # ============================================================
+  # ==============================================================
   # JOB 5: BUILD, SCAN & PUSH (Production)
-  # ============================================================
+  # ==============================================================
   build-and-push:
     needs: release
     runs-on: ubuntu-latest
@@ -291,9 +286,9 @@ jobs:
           echo "- **Signed**: ✅ Cosign" >> $GITHUB_STEP_SUMMARY
           echo "- **SBOM**: ✅ Generated" >> $GITHUB_STEP_SUMMARY
 
-  # ============================================================
+  # ==============================================================
   # JOB 6: NOTIFICATIONS
-  # ============================================================
+  # ==============================================================
   notify:
     needs: [lint, test, security, release, build-and-push]
     runs-on: ubuntu-latest
