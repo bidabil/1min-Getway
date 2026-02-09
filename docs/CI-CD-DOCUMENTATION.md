@@ -74,7 +74,7 @@ graph TD
     exit-code: '1'  # BLOQUE si vulnérabilités critiques
 ```
 
-**Avant** : L'image était scannée après publication (trop tard!)  
+**Avant** : L'image était scannée après publication (trop tard!)
 **Maintenant** : Le workflow échoue AVANT de publier une image vulnérable.
 
 ### 3. **Build de validation dans les PRs** 🔍
@@ -140,7 +140,7 @@ build-and-push:
     needs.release.outputs.new_release_published == 'true'
 ```
 
-**Avant** : L'image se buildait même sans release (gaspillage de ressources).  
+**Avant** : L'image se buildait même sans release (gaspillage de ressources).
 **Maintenant** : Build uniquement si une vraie release est créée.
 
 ### 8. **Notifications centralisées** 📢
@@ -262,7 +262,7 @@ Le workflow scanne **avant publication** et :
 - 📊 **Upload** les résultats dans GitHub Security
 - 📧 **Notifie** (optionnel) sur Slack/Discord
 
-**Voir les vulnérabilités** :  
+**Voir les vulnérabilités** :
 `ton-repo` → Security → Code scanning alerts
 
 ### 3. **Permissions minimales**
@@ -400,14 +400,14 @@ Ajoute un job `deploy` qui :
 
 **Score : 10/10** ✨
 
-✅ Tests automatisés avec cache  
-✅ Scan de sécurité AVANT publication  
-✅ Build multi-arch optimisé  
-✅ Signature cryptographique  
-✅ SBOM et provenance  
-✅ Validation sur PR  
-✅ Notifications centralisées  
-✅ Documentation complète  
+✅ Tests automatisés avec cache
+✅ Scan de sécurité AVANT publication
+✅ Build multi-arch optimisé
+✅ Signature cryptographique
+✅ SBOM et provenance
+✅ Validation sur PR
+✅ Notifications centralisées
+✅ Documentation complète
 
 ---
 

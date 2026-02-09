@@ -1,4 +1,7 @@
-# infrastructure/token_service.py
+"""
+Token calculation service for 1min-Gateway.
+Supports multiple model families with proper encoding.
+"""
 
 import logging
 
@@ -7,54 +10,70 @@ from mistral_common.protocol.instruct.messages import UserMessage
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-# Using a specific namespace for easier log filtering
 logger = logging.getLogger("1min-gateway.token-service")
 
 
 def calculate_token(sentence, model="gpt-4o"):
     """
-    Calculates the number of tokens in a string based on the target model.
-    Supports Mistral/Nemo, OpenAI families, and provides approximations for Anthropic.
+    Calculate tokens based on model family.
+
+    Args:
+        sentence: Text to tokenize
+        model: Target model name
+
+    Returns:
+        int: Estimated token count
     """
     if not sentence:
         return 0
 
+    text = str(sentence)
+
     try:
         model_lower = model.lower()
 
+        # --- ANTHROPIC CLAUDE MODELS ---
+        # Claude has specific tokenization (approximation)
+        if any(claude in model_lower for claude in ["claude", "sonnet", "opus", "haiku"]):
+            # Claude models use a different tokenizer
+            # Approximation: 1 token ≈ 3.5 characters for Claude
+            token_count = max(1, len(text) // 3)
+            logger.debug(f"TOKEN | Claude model {model}: {token_count} tokens")
+            return token_count
+
         # --- MISTRAL FAMILY ---
-        # Mistral uses a specific tokenizer (Llama 3 based or Tekken)
-        if "mistral" in model_lower or "nemo" in model_lower:
-            target_model = "open-mistral-nemo"
-            tokenizer = MistralTokenizer.from_model(target_model)
-            tokenized = tokenizer.encode_chat_completion(
-                ChatCompletionRequest(
-                    messages=[UserMessage(content=str(sentence))],
-                    model=target_model,
-                )
-            )
-            return len(tokenized.tokens)
-
-        # --- OPENAI & ANTHROPIC FAMILY ---
-        # Note: Claude 3 uses a tokenizer similar to cl100k_base or o200k_base.
-        # tiktoken is the most reliable tool for these estimates.
-        elif any(m in model_lower for m in ["gpt-3.5", "gpt-4", "gpt-4o", "claude", "o1", "o3"]):
+        if any(mistral in model_lower for mistral in ["mistral", "nemo", "magistral", "ministral"]):
             try:
-                # Attempt to get the exact encoding for the model
-                encoding = tiktoken.encoding_for_model(model)
-            except KeyError:
-                # Fallback to cl100k_base, the most common standard for modern LLMs
+                target_model = "open-mistral-nemo"
+                tokenizer = MistralTokenizer.from_model(target_model)
+                tokenized = tokenizer.encode_chat_completion(
+                    ChatCompletionRequest(
+                        messages=[UserMessage(content=text)],
+                        model=target_model,
+                    )
+                )
+                token_count = len(tokenized.tokens)
+                logger.debug(f"TOKEN | Mistral model {model}: {token_count} tokens")
+                return token_count
+            except Exception as e:
+                logger.warning(f"TOKEN | Fallback for Mistral: {str(e)}")
+                # Fallback to cl100k_base
                 encoding = tiktoken.get_encoding("cl100k_base")
+                return len(encoding.encode(text))
 
-            return len(encoding.encode(str(sentence)))
-
-        # --- DEFAULT FALLBACK ---
-        # If the model is unknown, we use the standard cl100k_base encoder
-        else:
+        # --- OPENAI & OTHERS ---
+        # Try to get exact encoding for the model
+        try:
+            encoding = tiktoken.encoding_for_model(model)
+        except KeyError:
+            # Fallback to cl100k_base (used by GPT-4, Claude, Gemini)
             encoding = tiktoken.get_encoding("cl100k_base")
-            return len(encoding.encode(str(sentence)))
+
+        token_count = len(encoding.encode(text))
+        logger.debug(f"TOKEN | {model}: {token_count} tokens")
+        return token_count
 
     except Exception as e:
-        logger.error(f"TOKEN_CALC_ERROR | Model: {model} | Error: {str(e)[:100]}")
-        # Fallback estimation: roughly 1 token per 4 characters
-        return max(1, len(str(sentence)) // 4)
+        logger.error(f"TOKEN | Error for {model}: {str(e)[:100]}")
+        # Safe fallback: standard OpenAI approximation
+        return max(1, len(text) // 4)

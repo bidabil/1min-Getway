@@ -10,7 +10,7 @@ def get_formatted_models_list(all_models, permit_subset_only, subset_models):
     Constructs the list of available models in OpenAI-compatible format.
     Handles filtering logic based on environment configuration (Full vs. Subset).
     """
-    # Determine the source of truth based on user restrictions
+    # Determine the source of truth based on user restrictions-
     source_list = subset_models if permit_subset_only else all_models
 
     # Safety Check: Warn if the configuration results in an empty list

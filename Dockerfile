@@ -1,18 +1,16 @@
+
 # --- STAGE 1: Builder ---
 FROM python:3.12-slim AS builder
 
-# Désactiver le cache pip pour gagner de la place et éviter les fichiers .pyc
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# On installe build-essential uniquement ici pour compiler les dépendances (tiktoken, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Installation des dépendances dans un dossier utilisateur pour faciliter le transfert
 COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
@@ -20,26 +18,37 @@ RUN pip install --user --no-cache-dir -r requirements.txt
 # --- STAGE 2: Runtime (Image finale) ---
 FROM python:3.12-slim
 
+# Labels OCI standards
+LABEL org.opencontainers.image.title="1min-Gateway"
+LABEL org.opencontainers.image.description="Intelligent API Gateway for AI models"
+LABEL org.opencontainers.image.vendor="Billel Attafi"
+LABEL org.opencontainers.image.source="https://github.com/billelattafi/1min-gateway"
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PATH=/root/.local/bin:$PATH
+ENV PATH=/home/appuser/.local/bin:$PATH
 
 WORKDIR /app
 
-# On récupère uniquement les bibliothèques compilées de l'étape précédente
-COPY --from=builder /root/.local /root/.local
+# Créer un utilisateur non-root AVANT de copier les fichiers
+RUN useradd --create-home --shell /bin/bash appuser
 
-# Copie du code source
-COPY . .
+# Copier les dépendances depuis le builder
+COPY --from=builder /root/.local /home/appuser/.local
 
-# Gestion des logs (création du dossier et permissions)
-RUN mkdir -p logs && chmod 777 logs
+# Copier le code source avec les bonnes permissions
+COPY --chown=appuser:appuser . .
 
-# Expose le port de l'application
+# Créer le dossier de logs
+RUN mkdir -p logs && chown -R appuser:appuser logs
+
+# Passer à l'utilisateur non-root
+USER appuser
+
+# Healthcheck intégré
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:5001/', timeout=5)" || exit 1
+
 EXPOSE 5001
-
-# Utilisation d'un utilisateur non-root pour la sécurité (optionnel mais conseillé)
-# RUN useradd -m appuser && chown -R appuser /app
-# USER appuser
 
 CMD ["python", "main.py"]

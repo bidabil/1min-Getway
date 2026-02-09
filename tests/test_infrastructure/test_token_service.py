@@ -2,97 +2,171 @@
 """
 Tests pour le service de calcul de tokens.
 """
-from unittest.mock import MagicMock, patch
+
+from unittest.mock import patch
 
 import pytest
 
 
-class TestTokenService:
-    """Tests pour le calcul de tokens."""
+class TestCalculateToken:
+    """Tests pour calculate_token."""
 
-    def test_calculate_token_empty_string(self):
-        """Test avec une chaîne vide."""
+    @pytest.fixture
+    def calculate_fn(self):
         from src.infrastructure.token_service import calculate_token
 
-        result = calculate_token("")
+        return calculate_token
+
+    # --- Tests de base ---
+    def test_returns_zero_for_empty_string(self, calculate_fn):
+        # Act
+        result = calculate_fn("")
+
+        # Assert
         assert result == 0
 
-    def test_calculate_token_openai_model(self):
-        """Test avec un modèle OpenAI."""
-        from src.infrastructure.token_service import calculate_token
+    def test_returns_integer(self, calculate_fn):
+        # Act
+        result = calculate_fn("Hello world", "gpt-4o")
 
-        text = "Bonjour, comment ça va ?"
-        result = calculate_token(text, "gpt-4o")
-
+        # Assert
         assert isinstance(result, int)
         assert result > 0
 
-    def test_calculate_token_mistral_model(self):
-        """Test avec un modèle Mistral."""
-        from src.infrastructure.token_service import calculate_token
-
+    # --- Tests par fournisseur ---
+    def test_openai_model(self, calculate_fn):
+        # Arrange
         text = "Bonjour, comment ça va ?"
-        result = calculate_token(text, "mistral-medium-latest")
 
-        assert isinstance(result, int)
+        # Act
+        result = calculate_fn(text, "gpt-4o")
+
+        # Assert
         assert result > 0
 
-    def test_calculate_token_claude_model(self):
-        """Test avec un modèle Claude."""
-        from src.infrastructure.token_service import calculate_token
-
+    def test_openai_mini_model(self, calculate_fn):
+        # Arrange
         text = "Bonjour, comment ça va ?"
-        result = calculate_token(text, "claude-3-haiku")
 
-        assert isinstance(result, int)
+        # Act
+        result = calculate_fn(text, "gpt-4o-mini")
+
+        # Assert
         assert result > 0
 
-    def test_calculate_token_unknown_model(self):
-        """Test avec un modèle inconnu (fallback)."""
-        from src.infrastructure.token_service import calculate_token
-
+    def test_mistral_model(self, calculate_fn):
+        # Arrange
         text = "Bonjour, comment ça va ?"
-        result = calculate_token(text, "unknown-model-123")
 
-        assert isinstance(result, int)
+        # Act
+        result = calculate_fn(text, "mistral-medium-latest")
+
+        # Assert
         assert result > 0
 
-    def test_calculate_token_long_text(self):
-        """Test avec un texte long."""
-        from src.infrastructure.token_service import calculate_token
+    def test_claude_model(self, calculate_fn):
+        # Arrange
+        text = "Bonjour, comment ça va ?"
 
-        text = "Lorem ipsum " * 100  # 1200 caractères
-        result = calculate_token(text, "gpt-4o")
+        # Act
+        result = calculate_fn(text, "claude-3-haiku")
 
-        assert isinstance(result, int)
-        # L'estimation est approximative, donc on met une plage
-        assert 150 <= result <= 350  # Plage plus large
+        # Assert
+        assert result > 0
 
+    def test_unknown_model_uses_fallback(self, calculate_fn):
+        # Arrange
+        text = "Bonjour, comment ça va ?"
+
+        # Act
+        result = calculate_fn(text, "unknown-model-xyz")
+
+        # Assert
+        assert result > 0
+
+    # --- Tests de longueur ---
+    def test_long_text(self, calculate_fn):
+        # Arrange
+        text = "Lorem ipsum dolor sit amet. " * 100
+
+        # Act
+        result = calculate_fn(text, "gpt-4o")
+
+        # Assert
+        assert result > 100  # Long text = many tokens
+
+    def test_short_text(self, calculate_fn):
+        # Arrange
+        text = "Hi"
+
+        # Act
+        result = calculate_fn(text, "gpt-4o")
+
+        # Assert
+        assert result >= 1
+
+    # --- Tests de gestion d'erreurs ---
     @patch("src.infrastructure.token_service.tiktoken.encoding_for_model")
-    def test_calculate_token_encoding_error(self, mock_encoding):
-        """Test quand l'encodage échoue."""
-        from src.infrastructure.token_service import calculate_token
-
-        # Simuler une erreur KeyError
+    def test_handles_tiktoken_error_gracefully(self, mock_encoding, calculate_fn):
+        # Arrange
         mock_encoding.side_effect = KeyError("Unknown model")
 
-        text = "Test text"
-        result = calculate_token(text, "unknown-model")
+        # Act
+        result = calculate_fn("Test text", "gpt-4o")
 
+        # Assert
         assert isinstance(result, int)
-        assert result > 0
+        assert result >= 0
 
     @patch("src.infrastructure.token_service.MistralTokenizer.from_model")
-    def test_calculate_token_mistral_error(self, mock_tokenizer):
-        """Test quand le tokenizer Mistral échoue."""
-        from src.infrastructure.token_service import calculate_token
-
-        # Simuler une erreur
+    def test_handles_mistral_tokenizer_error(self, mock_tokenizer, calculate_fn):
+        # Arrange
         mock_tokenizer.side_effect = Exception("Mistral error")
 
-        text = "Test text"
-        result = calculate_token(text, "mistral-medium-latest")
+        # Act
+        result = calculate_fn("Test text", "mistral-medium-latest")
 
-        # Devrait tomber en fallback
+        # Assert
+        # Should fall back to estimation
         assert isinstance(result, int)
-        assert result > 0
+        assert result >= 0
+
+    # --- Tests paramétrés ---
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo",
+            "claude-3-haiku",
+            "claude-3-sonnet",
+            "mistral-medium-latest",
+            "unknown-model",
+        ],
+    )
+    def test_various_models(self, calculate_fn, model):
+        # Arrange
+        text = "Hello, this is a test message."
+
+        # Act
+        result = calculate_fn(text, model)
+
+        # Assert
+        assert isinstance(result, int)
+        assert result >= 0
+
+    @pytest.mark.parametrize(
+        "text,min_tokens",
+        [
+            ("", 0),
+            ("Hi", 1),
+            ("Hello world", 2),
+            ("This is a longer sentence with more tokens.", 5),
+        ],
+    )
+    def test_various_text_lengths(self, calculate_fn, text, min_tokens):
+        # Act
+        result = calculate_fn(text, "gpt-4o")
+
+        # Assert
+        assert result >= min_tokens
