@@ -1,30 +1,30 @@
+
 # 1min-Gateway 🚀
 
-### *By BillelAttafi*
+[![CI/CD](https://github.com/BillelAttafi/1min-gateway/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/BillelAttafi/1min-gateway/actions)
+[![Docker](https://img.shields.io/docker/v/billelattafi/1min-gateway?label=Docker%20Hub)](https://hub.docker.com/r/billelattafi/1min-gateway)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![semantic-release](https://img.shields.io/badge/semantic--release-gitmoji-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-**The ultimate bridge to relay 1min.ai API into an OpenAI-compatible structure in seconds.**
+**The ultimate bridge to relay 1min.ai API into an OpenAI-compatible structure.**
 
-Don't forget to **star** ⭐ this repository if you like it!
+> Seamlessly integrate 1min.ai with any OpenAI-compatible client like TypingMind, bolt.diy, ChatBox, or LibreChat.
 
-*Hosted version & details:* [kokodev.cc/1minrelay](https://www.kokodev.cc/1minrelay)
+⭐ **Star this repository** if you find it useful!
+
+🌐 **Hosted version**: [kokodev.cc/1minrelay](https://www.kokodev.cc/1minrelay)
 
 ---
 
 ## ✨ Features
 
-* **⚡ bolt.diy Support**: Fully compatible for seamless AI-assisted development.
-* **🔗 OpenAI Standard**: Works with `TypingMind`, `ChatBox`, `LibreChat`, and more.
-* **🧠 Multimodal Power**:
-* **Vision**: Real-time image analysis.
-* **Documents**: Support for `.pdf`, `.docx`, `.txt`, `.yaml`.
-* **Generation**: Direct access to Flux, SDXL, and other 1min.ai models.
-
-* **🚀 Performance & Security**:
-* **Native Streaming**: Zero-latency real-time interactions.
-* **Rate Limiting**: Built-in Memcached support for high-traffic stability.
-* **Precision Tokenization**: Uses `Tiktoken` & `Mistral-Tokenizer`.
-
-* **🌍 Cross-Platform**: Native builds for **ARM64** and **AMD64**.
+| Category | Features |
+|----------|----------|
+| **🔗 Compatibility** | OpenAI-standard API • Works with TypingMind, ChatBox, LibreChat, bolt.diy |
+| **🧠 Multimodal** | Vision (image analysis) • Documents (.pdf, .docx, .txt, .yaml) • Image generation (Flux, SDXL) |
+| **🚀 Performance** | Native streaming • Rate limiting (Memcached) • Precision tokenization (Tiktoken, Mistral) |
+| **🔒 Security** | Cosign-signed images • SBOM generation • Trivy vulnerability scanning |
+| **🌍 Platform** | Multi-arch builds (AMD64 + ARM64) • Docker-ready • Auto-updates via Watchtower |
 
 ---
 
@@ -32,75 +32,147 @@ Don't forget to **star** ⭐ this repository if you like it!
 
 ```mermaid
 graph LR
-    A[AI Client: TypingMind/Bolt] -- OpenAI Format --> B(1min-Gateway)
-    B -- Translation --> C[1min.ai API]
-    C -- AI Response --> B
-    B -- Streaming Output --> A
-
+    A[AI Client] -->|OpenAI Format| B(1min-Gateway)
+    B -->|Translation| C[1min.ai API]
+    C -->|Response| B
+    B -->|Streaming| A
 ```
 
 ---
 
-## 🛠 Installation
+## 🚀 Quick Start
 
-### 🐳 The Pro Way (Docker Compose)
-
-Recommended for stability and auto-updates.
+### Docker Compose (Recommended)
 
 ```bash
+# Clone the repository
 git clone https://github.com/billelattafi/1min-gateway.git
 cd 1min-gateway
 
-# 1. Setup your environment
+# Configure environment
 cp .env.example .env
-nano .env # Add your 1min.ai API Key
+nano .env  # Add your 1min.ai API Key
 
-# 2. Launch (using Makefile)
-make docker-up
-
+# Launch
+make up
 ```
 
-### 📦 Simple Docker Run
+### Docker Run
 
 ```bash
 docker run -d --name 1min-gateway \
   -p 5001:5001 \
   -e ONE_MIN_AI_API_KEY=your_key_here \
   billelattafi/1min-gateway:latest
+```
 
+### Local Development
+
+```bash
+# Install dependencies
+make install
+
+# Run tests
+make test
+
+# Start development server
+make dev
 ```
 
 ---
 
-## ⚙️ Configuration (.env)
+## ⚙️ Configuration
+
+### Environment Variables
 
 | Variable | Description | Default |
-| --- | --- | --- |
-| `ONE_MIN_AI_API_KEY` | **Required** Your 1min.ai secret key. | `None` |
-| `PERMIT_MODELS_FROM_SUBSET_ONLY` | Restrict usage to specific models. | `False` |
-| `SUBSET_OF_ONE_MIN_PERMITTED_MODELS` | Allowed models (e.g., `gpt-4o,deepseek-chat`). | `Full Catalog` |
-| `RATELIMIT_ENABLED` | Enable/Disable request throttling. | `True` |
+|----------|-------------|---------|
+| `ONE_MIN_AI_API_KEY` | **Required** - Your 1min.ai API key | - |
+| `PERMIT_MODELS_FROM_SUBSET_ONLY` | Restrict to specific models | `False` |
+| `SUBSET_OF_ONE_MIN_PERMITTED_MODELS` | Allowed models list | All |
+| `RATELIMIT_ENABLED` | Enable request throttling | `True` |
+| `LOG_LEVEL` | Logging verbosity | `INFO` |
+| `DEBUG` | Debug mode | `False` |
+
+See [`.env.example`](.env.example) for complete configuration options.
 
 ---
 
-## 💎 Support & Paid Perks
+## 📖 Documentation
 
-Support the project by [donating here](https://donate.stripe.com/00w4gB1NbdI60afcKPgMw00) or purchasing the [Hosted Version](https://shop.kokodev.cc/products).
+| Document | Description |
+|----------|-------------|
+| [Contributing Guide](docs/CONTRIBUTING.md) | Development workflow and commit standards |
+| [CI/CD Documentation](docs/CI-CD-DOCUMENTATION.md) | Pipeline architecture and configuration |
+| [CI/CD Cheatsheet](docs/CI-CD-CHEATSHEET.md) | Quick reference for releases |
+| [Dependabot Guide](docs/DEPENDABOT-DOCUMENTATION.md) | Automated dependency updates |
+| [Docker & Environment](docs/ENV-DOCKER-GUIDE.md) | Container configuration |
+| [API Parameters](docs/API_PARAMETERS.md) | Supported API parameters |
 
-* **Turnkey Hosting**: No server setup required.
-* **Beta Access**: Get Audio/Video features before anyone else.
-* **Priority Support**: Direct assistance on our **[Discord](https://discord.gg/GQd3DrxXyj)**.
+---
+
+## 🛠 Development
+
+### Prerequisites
+
+- Python 3.12+
+- Docker & Docker Compose
+- Node.js 18+ (for commit hooks)
+
+### Makefile Commands
+
+```bash
+make install      # Install dependencies and hooks
+make dev          # Start development server
+make test         # Run tests with coverage
+make lint         # Check code quality (Ruff)
+make format       # Format code (Ruff)
+make up           # Docker Compose up
+make down         # Docker Compose down
+make clean        # Clean build artifacts
+```
+
+### Commit Convention
+
+We use **Gitmoji + Conventional Commits**:
+
+```bash
+:sparkles: feat(Core): add new feature
+:bug: fix(Gateway): resolve streaming issue
+:memo: docs(Config): update configuration guide
+```
+
+See [gitmoji.dev](https://gitmoji.dev) for emoji codes.
+
+---
+
+## 💎 Support
+
+Support the project:
+- [GitHub Sponsors](https://github.com/sponsors/BillelAttafi)
+- [Ko-fi](https://ko-fi.com/billelattafi)
+- [Buy Me a Coffee](https://buymeacoffee.com/billel)
+
+### Hosted Version Benefits
+
+- Turnkey hosting (no server setup)
+- Beta access to new features
+- Priority support on [Discord](https://discord.gg/GQd3DrxXyj)
 
 ---
 
 ## 🤝 Contributing
 
-We love contributions! Please read our **[CONTRIBUTING.md](https://www.google.com/search?q=./CONTRIBUTING.md)** to learn about our development workflow and **Gitmoji** commit standards.
+Contributions are welcome! Please read our [Contributing Guide](docs/CONTRIBUTING.md) for details on:
+
+- Development setup
+- Commit message format
+- Pull request process
 
 ---
 
 ## 📜 License
 
-Distributed under the **MIT License**.
+MIT License - Copyright (c) 2026 Billel Attafi
 
-**Copyright (c) 2026 Billel Attafi**
+See [LICENSE](LICENSE) for details.

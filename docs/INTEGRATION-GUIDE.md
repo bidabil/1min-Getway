@@ -1,20 +1,22 @@
-# 🚀 Guide d'Intégration Complet - 1min-Gateway
 
-## 📋 Table des matières
+# 🚀 Integration Guide - 1min-Gateway
 
-- [Vue d'ensemble](#vue-densemble)
-- [Installation pas-à-pas](#installation-pas-à-pas)
-- [Structure des fichiers](#structure-des-fichiers)
-- [Configuration GitHub](#configuration-github)
-- [Premier commit et release](#premier-commit-et-release)
-- [Workflow quotidien](#workflow-quotidien)
+Complete guide to set up and use the 1min-Gateway DevOps ecosystem.
+
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Step-by-Step Installation](#step-by-step-installation)
+- [GitHub Configuration](#github-configuration)
+- [First Release](#first-release)
+- [Daily Workflow](#daily-workflow)
 - [Troubleshooting](#troubleshooting)
 
 ---
 
-## 🎯 Vue d'ensemble
+## 🎯 Overview
 
-Tu disposes maintenant d'un écosystème DevOps complet avec :
+The 1min-Gateway DevOps ecosystem provides:
 
 ```
 Local Development          GitHub Actions              Production
@@ -22,306 +24,208 @@ Local Development          GitHub Actions              Production
 Pre-commit hooks    →     CI/CD Pipeline       →      Docker Registry
   │                         │                            │
   ├─ Commitlint             ├─ Tests                     ├─ Docker Hub
-  ├─ Black/Flake8           ├─ Security Scan             └─ GHCR
-  ├─ isort                  ├─ Semantic Release
-  └─ Bandit                 └─ Multi-arch Build    →    Watchtower
+  ├─ Ruff (lint+format)     ├─ Security Scan             └─ GHCR
+  ├─ detect-secrets         ├─ Semantic Release
+  └─ hadolint               └─ Multi-arch Build    →    Watchtower
                                                           Auto-deploy
 ```
 
 ---
 
-## 📦 Installation pas-à-pas
+## 📦 Step-by-Step Installation
 
-### Étape 1 : Backup de ton code actuel
-
-```bash
-# Sauvegarde ton travail actuel
-git stash
-# OU
-git commit -m "🚧 WIP: Before DevOps setup"
-```
-
-### Étape 2 : Placement des nouveaux fichiers
-
-**Voici exactement où mettre chaque fichier :**
+### Step 1: Clone and Setup
 
 ```bash
-# Structure de ton projet
-1min-gateway/
-├── .github/
-│   ├── workflows/
-│   │   ├── ci-cd.yml                          # ✅ GARDER (déjà bon)
-│   │   └── dependabot-auto-merge.yml          # ⚠️ REMPLACER par dependabot-auto-merge-fixed.yml
-│   └── dependabot.yml                         # ✅ GARDER (déjà bon)
-│
-├── .pre-commit-config.yaml                    # 🔄 REMPLACER
-├── .releaserc.json                            # 🔄 REMPLACER
-├── commitlint.config.js                       # ➕ NOUVEAU FICHIER
-├── config.json                                # ❌ SUPPRIMER ou renommer en .czrc
-├── Makefile                                   # 🔄 REMPLACER
-│
-├── docker-compose.yml                         # ✅ GARDER
-├── Dockerfile                                 # ✅ GARDER
-├── requirements.txt                           # ✅ GARDER
-├── main.py                                    # ✅ GARDER
-└── ... (reste de ton code)
-```
+# Clone repository
+git clone https://github.com/BillelAttafi/1min-gateway.git
+cd 1min-gateway
 
-### Étape 3 : Commandes d'installation
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# or: venv\Scripts\activate  # Windows
 
-```bash
-# 1. Retour à la racine de ton projet
-cd /chemin/vers/1min-gateway
-
-# 2. Supprimer config.json (inutile)
-rm config.json
-
-# 3. Remplacer .releaserc.json
-cp /chemin/téléchargements/.releaserc.json .
-
-# 4. Remplacer .pre-commit-config.yaml
-cp /chemin/téléchargements/.pre-commit-config.yaml .
-
-# 5. Ajouter commitlint.config.js (nouveau)
-cp /chemin/téléchargements/commitlint.config.js .
-
-# 6. Remplacer dependabot-auto-merge.yml
-cp /chemin/téléchargements/dependabot-auto-merge-fixed.yml .github/workflows/dependabot-auto-merge.yml
-
-# 7. Remplacer Makefile
-cp /chemin/téléchargements/Makefile .
-
-# 8. Installer les dépendances
+# Install everything
 make install
 ```
 
-### Étape 4 : Créer les fichiers additionnels
-
-**1. `.secrets.baseline` (pour detect-secrets)**
+### Step 2: Verify Installation
 
 ```bash
-make setup-secrets
+# Check pre-commit hooks
+pre-commit run --all-files
+
+# Run tests
+make test
+
+# Verify Docker build
+make docker-build
 ```
 
-**2. `pyproject.toml` (pour Bandit config)**
+### Step 3: Configure Environment
 
 ```bash
-cat > pyproject.toml << 'EOF'
-[tool.bandit]
-exclude_dirs = ["tests", "venv", ".venv", "logs"]
-skips = ["B101", "B601"]
+# Copy environment template
+cp .env.example .env
 
-[tool.black]
-line-length = 100
-target-version = ['py312']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.venv
-  | venv
-  | logs
-  | __pycache__
-)/
-'''
-
-[tool.isort]
-profile = "black"
-line_length = 100
-EOF
+# Edit with your credentials
+nano .env
 ```
 
-**3. Vérifier que `requirements.txt` contient tout**
+**Required variables:**
 
 ```bash
-# Ajouter si manquant :
-cat >> requirements.txt << 'EOF'
-
-# Development tools
-pytest>=7.4.0
-pytest-cov>=4.1.0
-black>=23.0.0
-flake8>=6.0.0
-isort>=5.12.0
-bandit>=1.7.5
-pre-commit>=3.0.0
-EOF
+ONE_MIN_AI_API_KEY=sk-your-1min-ai-key
 ```
 
 ---
 
-## ⚙️ Configuration GitHub
+## ⚙️ GitHub Configuration
 
-### 1. Secrets GitHub à configurer
+### 1. Repository Secrets
 
-Va dans **Settings → Secrets and variables → Actions** et ajoute :
+Go to **Settings → Secrets and variables → Actions** and add:
 
-| Secret | Valeur | Où le trouver |
-|--------|--------|---------------|
-| `DOCKER_USERNAME` | `billelattafi` | Ton username Docker Hub |
-| `DOCKER_PASSWORD` | `dckr_pat_xxxxx` | [Créer un token](https://hub.docker.com/settings/security) |
-| `CODECOV_TOKEN` | (optionnel) | [codecov.io](https://codecov.io) pour couverture de code |
+| Secret | Description | Where to get it |
+|--------|-------------|-----------------|
+| `DOCKER_USERNAME` | Docker Hub username | Your Docker Hub account |
+| `DOCKER_PASSWORD` | Docker Hub access token | [Create token](https://hub.docker.com/settings/security) |
+
+> ⚠️ Use an **Access Token**, not your password!
 
 ### 2. Branch Protection
 
-**Settings → Branches → Add rule**
+Go to **Settings → Branches → Add rule**:
 
 ```
 Branch name pattern: main
 
 ☑️ Require a pull request before merging
    ☑️ Require approvals: 1
-   ☑️ Dismiss stale reviews
 
 ☑️ Require status checks to pass before merging
    ☑️ Require branches to be up to date
-   Sélectionner: "test" (obligatoire)
-
-☑️ Do not allow bypassing the above settings
+   Select: "test"
 
 ☑️ Allow auto-merge
 ```
 
-### 3. Activer Dependabot
+### 3. Enable Dependabot
 
-**Settings → Code security → Dependabot**
+Go to **Settings → Code security → Dependabot**:
 
 ```
 ☑️ Dependabot alerts: Enabled
 ☑️ Dependabot security updates: Enabled
-☑️ Dependabot version updates: Enabled (fichier dependabot.yml détecté automatiquement)
+☑️ Dependabot version updates: Enabled
 ```
 
 ---
 
-## 🎯 Premier commit et release
+## 🎯 First Release
 
-### Test 1 : Vérifier les hooks locaux
+### Test 1: Verify Local Hooks
 
 ```bash
-# Créer un fichier de test
+# Create a test file
 echo "print('test')" > test_commit.py
 
-# Essayer de commiter (devrait être formaté automatiquement)
+# Commit (hooks will run automatically)
 git add test_commit.py
-git commit -m "✨ feat(Core): Add test file"
+git commit -m ":sparkles: feat(Core): add test file"
 
-# Si pre-commit échoue, corrige les erreurs et recommite
-git add .
-git commit -m "✨ feat(Core): Add test file"
+# Clean up
+rm test_commit.py
+git reset --hard HEAD~1
 ```
 
-### Test 2 : Premier push (sans release)
+### Test 2: Documentation Commit (No Release)
 
 ```bash
-# Commit sans emoji de release
-git commit -m "📝 docs: Update README"
+git commit -m ":memo: docs(Config): update README"
 git push origin main
 
-# Résultat attendu :
-# ✅ Tests passent
-# ⏭️ Semantic Release : Aucune version créée (type "docs")
-# ⏭️ Build & Push : Skippé (pas de release)
+# Expected result:
+# ✅ Tests pass
+# ⏭️ No version created (docs type)
+# ⏭️ No Docker build
 ```
 
-### Test 3 : Première vraie release
+### Test 3: Feature Commit (Creates Release)
 
 ```bash
-# Commit qui déclenche une release
-git commit -m "✨ feat(Gateway): Add health endpoint"
+git commit -m ":sparkles: feat(Gateway): add health endpoint"
 git push origin main
 
-# Résultat attendu :
-# ✅ Tests passent
-# 🎉 Semantic Release : v1.0.0 créée
-# 🐳 Build & Push : Image taguée 1.0.0 + latest
-# 🔒 Cosign : Images signées
-# 📦 CHANGELOG.md généré
+# Expected result:
+# ✅ Tests pass
+# 🎉 Version v1.0.0 created
+# 🐳 Docker image built and pushed
+# 🔒 Image signed with Cosign
+# 📦 CHANGELOG.md updated
 ```
 
-**Vérifier le résultat :**
+### Verify Release
 
-1. Va sur **GitHub → Actions** → Voir le workflow
-2. Va sur **GitHub → Releases** → v1.0.0 devrait être là
-3. Va sur **Docker Hub** → Tags → `1.0.0` et `latest`
-4. Va sur **Security → Code scanning** → Résultats Trivy
+1. **GitHub Actions** → Check workflow status
+2. **GitHub Releases** → v1.0.0 should appear
+3. **Docker Hub** → Tags `1.0.0` and `latest`
+4. **Security tab** → Trivy scan results
 
 ---
 
-## 🔄 Workflow quotidien
+## 🔄 Daily Workflow
 
-### Développement de feature
+### Feature Development
 
 ```bash
-# 1. Créer une branche
-git checkout -b feat/nouvelle-feature
+# 1. Create feature branch
+git checkout -b feat/new-feature
 
-# 2. Coder
-# ... édite tes fichiers ...
+# 2. Code your changes
+# ...
 
-# 3. Tester localement
+# 3. Test locally
 make test
 make lint
 
-# 4. Commiter (les hooks vérifient automatiquement)
-make commit
-# OU
+# 4. Commit
 git add .
-git commit -m "✨ feat(Core): Ma nouvelle feature"
+git commit -m ":sparkles: feat(Core): add new feature"
 
-# 5. Push et créer une PR
-git push origin feat/nouvelle-feature
-# → Créer la PR sur GitHub
+# 5. Push and create PR
+git push origin feat/new-feature
+# Create PR on GitHub
 
-# 6. Attendre les checks CI/CD
-# → Tests s'exécutent automatiquement
-# → Build de validation (sans push)
-
-# 7. Merger la PR
-# → Semantic Release calcule la version
-# → Image Docker buildée et poussée
-# → Watchtower déploie automatiquement
+# 6. After merge, release is automatic
 ```
 
-### Gestion des PRs Dependabot
+### Handling Dependabot PRs
 
-**Scénario 1 : Patch de sécurité**
-
+**Patch updates** (auto-merged):
 ```
-Lundi 09:00 → PR créée : "⬆️ chore(deps): Bump fastapi 0.109.0 → 0.109.1"
-Lundi 09:15 → Tests passent
-Lundi 09:16 → Auto-merge automatique ✅
+PR: "⬆️ chore(deps): Bump fastapi 0.109.0 → 0.109.1"
+→ Tests pass → Auto-merged ✅
 ```
 
-**Scénario 2 : Mise à jour mineure production**
-
+**Minor updates** (manual review):
 ```
-Lundi 09:00 → PR créée : "⬆️ chore(deps): Bump pydantic 2.5.0 → 2.6.0"
-Lundi 09:15 → Tests passent
-Lundi 09:16 → Approuvée automatiquement, mais PAS mergée ⏸️
-Action : Tu review et merge manuellement
+PR: "⬆️ chore(deps): Bump pydantic 2.5.0 → 2.6.0"
+→ Tests pass → Approved, needs manual merge ⏸️
 ```
 
-**Scénario 3 : Mise à jour majeure**
-
+**Major updates** (requires attention):
 ```
-Lundi 09:00 → PR créée : "⬆️ chore(deps): Bump fastapi 0.109.0 → 1.0.0"
-Lundi 09:15 → Tests passent
-Lundi 09:16 → Approuvée avec commentaire "⚠️ MAJOR UPDATE" ⏸️
-Action :
-  1. Lis les release notes de FastAPI 1.0.0
-  2. Teste localement : git checkout dependabot/pip/...
-  3. Merge si OK
+PR: "⬆️ chore(deps): Bump fastapi 0.x → 1.0.0"
+→ Comment: "⚠️ MAJOR UPDATE"
+→ Review changelog, test locally, then merge
 ```
 
-### Créer une release manuelle
+### Force a Release
 
 ```bash
-# Si tu veux forcer une release sans nouveau code
-make release
-
-# Ou directement
-git commit --allow-empty -m "🚀 chore(release): Trigger new version"
+git commit --allow-empty -m ":rocket: chore(release): trigger new version"
 git push origin main
 ```
 
@@ -329,225 +233,90 @@ git push origin main
 
 ## 🐛 Troubleshooting
 
-### Problème 1 : Pre-commit hooks échouent
-
-**Symptôme** :
-
-```
-[INFO] Initializing environment for ...
-[ERROR] black failed with exit code 1
-```
-
-**Solution** :
+### Pre-commit Hooks Fail
 
 ```bash
-# Installer les dépendances manquantes
-make install
-
-# Ou réinstaller les hooks
+# Reinstall hooks
 pre-commit clean
-pre-commit install --install-hooks --hook-type commit-msg --hook-type pre-commit
+pre-commit install --install-hooks
 
-# Tester manuellement
+# Run manually
 pre-commit run --all-files
 ```
 
-### Problème 2 : Commitlint rejette mes commits
-
-**Symptôme** :
-
-```
-⧗   input: ✨ Add feature
-✖   subject may not be empty [subject-empty]
-```
-
-**Cause** : Le format n'est pas reconnu.
-
-**Solution** : Utilise le bon format
+### Commitlint Rejects Commit
 
 ```bash
-# ❌ Mauvais
-git commit -m "✨ Add feature"
+# ❌ Wrong
+git commit -m "fix bug"
 
-# ✅ Bon
-git commit -m "✨ feat(Core): Add feature"
-#              ^    ^     ^    ^
-#              │    │     │    └─ Description
-#              │    │     └────── Scope (optionnel mais recommandé)
-#              │    └──────────── Type (feat, fix, etc.)
-#              └───────────────── Gitmoji
+# ✅ Correct format
+git commit -m ":bug: fix(Core): resolve authentication issue"
 ```
 
-### Problème 3 : Semantic Release ne crée pas de version
+### No Release Created
 
-**Symptôme** : Push sur main mais pas de release créée.
+**Check commit type:**
+- `docs`, `style`, `chore`, `refactor` → No release
+- `feat` → Minor release
+- `fix` → Patch release
 
-**Causes possibles** :
+**Check `.releaserc.json`** is properly configured.
 
-1. **Type de commit ignoré** : `docs`, `style`, `chore` ne créent pas de releases
-2. **Pas de plugin installé** : Vérifier que `semantic-release-gitmoji` est dans CI/CD
-
-**Solution** :
-
-```yaml
-# Dans .github/workflows/ci-cd.yml
-- name: Semantic Release
-  uses: cycjimmy/semantic-release-action@v4
-  with:
-    extra_plugins: |
-      semantic-release-gitmoji
-      @semantic-release/changelog
-      @semantic-release/git
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-### Problème 4 : Dependabot auto-merge ne fonctionne pas
-
-**Diagnostic** :
+### Docker Build Fails
 
 ```bash
-# Vérifier les logs du workflow
-gh run list --workflow=dependabot-auto-merge.yml
-gh run view <run-id> --log
-```
-
-**Checklist** :
-
-- [ ] "Allow auto-merge" activé dans Settings → General
-- [ ] Branch protection configurée (require status check "test")
-- [ ] Workflow `dependabot-auto-merge.yml` présent
-- [ ] `checkName: "test"` (pas "build-and-push")
-
-### Problème 5 : Docker build échoue en CI/CD
-
-**Symptôme** :
-
-```
-Error: buildx failed with: ERROR: failed to solve: process "/bin/sh -c pip install ..."
-```
-
-**Solution** :
-
-```bash
-# Tester le build localement
+# Test locally
 make docker-build
 
-# Si ça marche localement, vérifier :
-# 1. Secrets Docker configurés dans GitHub
-# 2. Dockerfile utilise bien python:3.12-slim
-# 3. requirements.txt accessible
-
-# Forcer un rebuild sans cache
-make docker-build-no-cache
+# Check secrets are configured
+# Settings → Secrets → DOCKER_USERNAME, DOCKER_PASSWORD
 ```
 
-### Problème 6 : Watchtower ne met pas à jour
-
-**Symptôme** : Nouvelle image poussée mais container pas mis à jour.
-
-**Diagnostic** :
+### Watchtower Not Updating
 
 ```bash
-# Vérifier les logs Watchtower
+# Check Watchtower logs
 docker logs watchtower
 
-# Vérifier le label sur le container
+# Verify label on container
 docker inspect 1min-gateway | grep watchtower
-```
 
-**Solution** :
-
-```yaml
-# Dans docker-compose.yml, vérifier :
-1min-gateway:
-  labels:
-    - "com.centurylinklabs.watchtower.enable=true"  # ✅ Doit être présent
+# Label should be:
+# "com.centurylinklabs.watchtower.enable=true"
 ```
 
 ---
 
-## 📊 Commandes utiles quotidiennes
+## 📊 Useful Commands
 
 ```bash
-# Développement
-make dev              # Lancer l'app
-make test             # Tests
-make lint             # Vérifier le code
-make format           # Formater le code
-make commit           # Commit interactif
+# Development
+make dev              # Start development server
+make test             # Run tests
+make lint             # Check code quality
+make format           # Format code
 
-# Docker local
-make docker-build     # Build l'image
-make docker-run       # Run en standalone
-make docker-logs      # Voir les logs
-
-# Docker Compose
-make up               # Tout lancer
-make down             # Tout arrêter
-make logs-gateway     # Logs du gateway
-make restart          # Redémarrer
-
-# CI/CD
-make release          # Forcer une release
-make ci-full          # Simuler CI en local
+# Docker
+make up               # Docker Compose up
+make down             # Docker Compose down
+make logs             # View logs
+make restart          # Restart services
 
 # Maintenance
-make clean            # Nettoyer Python
-make clean-docker     # Nettoyer Docker
-make update           # Mettre à jour dépendances
+make clean            # Clean artifacts
+make update           # Update dependencies
 ```
 
 ---
 
-## 🎓 Ressources additionnelles
+## 📚 Related Documentation
 
-### Documentation officielle
-
-- **Semantic Release** : <https://semantic-release.gitbook.io/>
-- **Gitmoji** : <https://gitmoji.dev/>
-- **Commitlint** : <https://commitlint.js.org/>
-- **Pre-commit** : <https://pre-commit.com/>
-- **Dependabot** : <https://docs.github.com/en/code-security/dependabot>
-
-### Cheatsheets créées pour toi
-
-- `CI-CD-CHEATSHEET.md` → Commandes CI/CD
-- `CI-CD-DOCUMENTATION.md` → Doc complète CI/CD
-- `DEPENDABOT-DOCUMENTATION.md` → Doc complète Dependabot
+- [CI/CD Documentation](CI-CD-DOCUMENTATION.md) - Pipeline details
+- [CI/CD Cheatsheet](CI-CD-CHEATSHEET.md) - Quick reference
+- [Dependabot Guide](DEPENDABOT-DOCUMENTATION.md) - Dependency management
+- [Docker Guide](ENV-DOCKER-GUIDE.md) - Container configuration
 
 ---
 
-## ✅ Checklist finale
-
-Avant de commit le setup complet :
-
-- [ ] Tous les fichiers placés aux bons endroits
-- [ ] `make install` exécuté sans erreur
-- [ ] Secrets GitHub configurés (DOCKER_USERNAME, DOCKER_PASSWORD)
-- [ ] Branch protection activée
-- [ ] Dependabot activé
-- [ ] Test commit local réussi
-- [ ] Première release testée
-
-**Commandes de vérification finale** :
-
-```bash
-# 1. Vérifier l'installation
-make version
-
-# 2. Tester les hooks
-make pre-commit
-
-# 3. Tester les tests
-make test
-
-# 4. Vérifier Docker
-make docker-build
-```
-
----
-
-**Setup terminé ! Ton projet est maintenant 100% production-ready.** 🎉
-
-Pour toute question, consulte les documentations ou ouvre une issue sur GitHub !
+**Setup complete! Your project is production-ready.** 🎉
