@@ -1,5 +1,5 @@
 # --- STAGE 1: Builder ---
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 # Désactiver le cache pip pour gagner de la place et éviter les fichiers .pyc
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -18,7 +18,7 @@ RUN pip install --user --no-cache-dir -r requirements.txt
 
 
 # --- STAGE 2: Runtime (Image finale) ---
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
