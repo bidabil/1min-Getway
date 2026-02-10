@@ -1,6 +1,15 @@
 
 # ==============================================================
-# CI/CD Pipeline - 1min-Gateway (Production-Ready v2.0)
+# CI/CD Pipeline - 1min-Gateway (Production-Ready v3.0)
+# ==============================================================
+# Features:
+# - Parallel jobs execution
+# - Matrix testing (multiple Python versions)
+# - Concurrency control
+# - Timeouts protection
+# - Test artifacts upload
+# - Dependency caching
+# - Reusable workflow patterns
 # ==============================================================
 
 name: 1min-Gateway CI/CD
@@ -10,6 +19,11 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+
+# Prevent concurrent runs on same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   IMAGE_NAME: billelattafi/1min-gateway
@@ -22,10 +36,12 @@ permissions:
 
 jobs:
   # ==============================================================
-  # JOB 0: LINT & FORMAT
+  # JOB 0: LINT & FORMAT (Fast feedback)
   # ==============================================================
   lint:
+    name: Lint & Format
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,6 +50,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache Ruff
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ruff-${{ env.RUFF_VERSION }}
 
       - name: Install Ruff
         run: pip install ruff==${{ env.RUFF_VERSION }}
@@ -45,18 +67,99 @@ jobs:
         run: ruff format --check --diff .
 
   # ==============================================================
-  # JOB 1: TESTS
+  # JOB 1: TESTS (Matrix strategy for multiple Python versions)
   # ==============================================================
   test:
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        include:
+          - python-version: "3.12"
+            coverage: true
     env:
-      # Test environment variables (not real secrets, safe for CI)
       ONE_MIN_AI_API_KEY: "test-api-key-for-ci-testing"  # pragma: allowlist secret
       SECRET_KEY: "test-secret-key-for-ci-testing-only-not-production"  # pragma: allowlist secret
       APP_ENV: "testing"
       DEBUG: "True"
       RATELIMIT_ENABLED: "False"
       LOG_LEVEL: "DEBUG"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-xdist
+
+      - name: Run Tests with Coverage
+        if: matrix.coverage
+        run: |
+          pytest tests/ -v \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-fail-under=75 \
+            --junitxml=test-results.xml \
+            -n auto
+
+      - name: Run Tests (without coverage)
+        if: ${{ !matrix.coverage }}
+        run: |
+          pytest tests/ -v \
+            --junitxml=test-results.xml \
+            -n auto
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: |
+            test-results.xml
+            coverage.xml
+            htmlcov/
+          retention-days: 7
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        if: matrix.coverage && always()
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: python-${{ matrix.python-version }}
+
+      - name: Test Summary
+        if: always()
+        uses: test-summary/action@v2
+        with:
+          paths: test-results.xml
+
+  # ==============================================================
+  # JOB 2: SECURITY SCAN (Parallel with tests)
+  # ==============================================================
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      security-events: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -69,60 +172,65 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-cov
-
-      - name: Run Tests with Coverage
-        run: |
-          pytest tests/ -v \
-            --cov=src \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=75
-
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v5
-        if: always()
-        with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  # ==============================================================
-  # JOB 2: SECURITY SCAN
-  # ==============================================================
-  security:
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          pip install ruff==${{ env.RUFF_VERSION }}
+          pip install pip-audit
 
       - name: Security Lint (Ruff + Bandit rules)
-        run: |
-          pip install ruff==${{ env.RUFF_VERSION }}
-          ruff check . --select S --output-format=github
+        run: ruff check . --select S --output-format=github
 
-      - name: Dependency Security Scan
-        uses: pyupio/safety-action@v1
+      - name: Dependency Audit (pip-audit)
+        run: |
+          pip install -r requirements.txt
+          pip-audit --format=json --output=audit-results.json || true
+          pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
         continue-on-error: true
+
+      - name: Upload Audit Results
+        uses: actions/upload-artifact@v4
+        if: always()
         with:
-          api-key: ${{ secrets.SAFETY_API_KEY }}
+          name: security-audit
+          path: audit-results.json
+          retention-days: 30
 
   # ==============================================================
-  # JOB 3: RELEASE (Semantic Release)
+  # JOB 3: QUALITY GATE (Aggregate results)
+  # ==============================================================
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [lint, test, security]
+    if: always()
+    steps:
+      - name: Check Job Results
+        run: |
+          echo "## Quality Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if any job failed
+        if: |
+          needs.lint.result == 'failure' ||
+          needs.test.result == 'failure' ||
+          needs.security.result == 'failure'
+        run: |
+          echo "::error::Quality gate failed - one or more jobs failed"
+          exit 1
+
+  # ==============================================================
+  # JOB 4: RELEASE (Semantic Release)
   # ==============================================================
   release:
-    needs: [lint, test, security]
+    name: Semantic Release
+    needs: [quality-gate]
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
+    timeout-minutes: 10
+    if: github.event_name != 'pull_request' && needs.quality-gate.result == 'success'
     permissions:
       contents: write
       issues: write
@@ -147,16 +255,19 @@ jobs:
       - name: Release Summary
         if: steps.semantic.outputs.new_release_published == 'true'
         run: |
-          echo "New release: v${{ steps.semantic.outputs.new_release_version }}"
-          echo "## Release v${{ steps.semantic.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "## New Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: v${{ steps.semantic.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
-  # JOB 4: BUILD VALIDATION (Pull Requests only)
+  # JOB 5: BUILD VALIDATION (Pull Requests only)
   # ==============================================================
   build-validation:
-    needs: [lint, test]
+    name: Docker Build Validation
+    needs: [quality-gate]
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
+    if: github.event_name == 'pull_request' && needs.quality-gate.result == 'success'
 
     steps:
       - name: Checkout repository
@@ -174,16 +285,22 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:pr-${{ github.event.pull_request.number }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          outputs: type=cacheonly
 
       - name: Build Summary
-        run: echo "Docker build successful for PR ${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+        run: |
+          echo "## Docker Build Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Docker build successful for PR #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
-  # JOB 5: BUILD, SCAN & PUSH (Production)
+  # JOB 6: BUILD, SCAN & PUSH (Production)
   # ==============================================================
   build-and-push:
+    name: Build & Push Docker Image
     needs: release
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: |
       github.event_name != 'pull_request' &&
       needs.release.outputs.new_release_published == 'true'
@@ -254,6 +371,14 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
+      - name: Upload Trivy results as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-scan-results
+          path: trivy-results.sarif
+          retention-days: 30
+
       - name: Build and push multi-architecture images
         id: build-and-push
         uses: docker/build-push-action@v6
@@ -276,63 +401,102 @@ jobs:
           COSIGN_EXPERIMENTAL: "1"
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: |
-          echo "Signing images..."
           cosign sign --yes "${{ env.IMAGE_NAME }}@${DIGEST}"
           cosign sign --yes "ghcr.io/${{ env.GHCR_IMAGE }}@${DIGEST}"
 
       - name: Deployment Summary
         run: |
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: v${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Docker Hub**: ${{ env.IMAGE_NAME }}:${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **GHCR**: ghcr.io/${{ env.GHCR_IMAGE }}:${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Signed**: Yes (Cosign)" >> $GITHUB_STEP_SUMMARY
-          echo "- **SBOM**: Generated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | v${{ needs.release.outputs.new_release_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Hub | \`${{ env.IMAGE_NAME }}:${{ needs.release.outputs.new_release_version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| GHCR | \`ghcr.io/${{ env.GHCR_IMAGE }}:${{ needs.release.outputs.new_release_version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Signed | Yes (Cosign) |" >> $GITHUB_STEP_SUMMARY
+          echo "| SBOM | Generated |" >> $GITHUB_STEP_SUMMARY
+          echo "| Platforms | linux/amd64, linux/arm64 |" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
-  # JOB 6: NOTIFICATIONS
+  # JOB 7: NOTIFICATIONS
   # ==============================================================
   notify:
-    needs: [lint, test, security, release, build-and-push]
+    name: Pipeline Notification
+    needs: [lint, test, security, quality-gate, release, build-and-push]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: always() && github.event_name != 'pull_request'
 
     steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: artifacts
+
       - name: Determine pipeline status
         id: status
         run: |
           if [[ "${{ needs.build-and-push.result }}" == "success" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
-            echo "emoji=success" >> $GITHUB_OUTPUT
             echo "message=Deployment successful" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.build-and-push.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
-            echo "emoji=failure" >> $GITHUB_OUTPUT
             echo "message=Deployment failed" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.quality-gate.result }}" == "failure" ]]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=Quality gate failed" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.test.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
-            echo "emoji=failure" >> $GITHUB_OUTPUT
             echo "message=Tests failed" >> $GITHUB_OUTPUT
-          elif [[ "${{ needs.lint.result }}" == "failure" ]]; then
-            echo "status=failure" >> $GITHUB_OUTPUT
-            echo "emoji=failure" >> $GITHUB_OUTPUT
-            echo "message=Lint failed" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
           else
             echo "status=skipped" >> $GITHUB_OUTPUT
-            echo "emoji=skipped" >> $GITHUB_OUTPUT
             echo "message=No release triggered" >> $GITHUB_OUTPUT
+            echo "color=warning" >> $GITHUB_OUTPUT
           fi
 
       - name: Pipeline Report
         run: |
-          echo "## Pipeline Report - ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Release | ${{ needs.release.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build and Push | ${{ needs.build-and-push.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "## Pipeline Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status | Duration |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | ${{ needs.test.result }} | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | ${{ needs.security.result }} | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality Gate | ${{ needs.quality-gate.result }} | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release | ${{ needs.release.result }} | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build & Push | ${{ needs.build-and-push.result }} | - |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Test results available for 7 days" >> $GITHUB_STEP_SUMMARY
+          echo "- Security audit available for 30 days" >> $GITHUB_STEP_SUMMARY
+
+      # Optional: Slack notification (uncomment if you have SLACK_WEBHOOK_URL secret)
+      # - name: Slack Notification
+      #   if: always()
+      #   uses: 8398a7/action-slack@v3
+      #   with:
+      #     status: custom
+      #     custom_payload: |
+      #       {
+      #         "text": "Pipeline ${{ steps.status.outputs.status }}: ${{ steps.status.outputs.message }}",
+      #         "attachments": [{
+      #           "color": "${{ steps.status.outputs.color }}",
+      #           "fields": [
+      #             { "title": "Repository", "value": "${{ github.repository }}", "short": true },
+      #             { "title": "Branch", "value": "${{ github.ref_name }}", "short": true }
+      #           ]
+      #         }]
+      #       }
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
