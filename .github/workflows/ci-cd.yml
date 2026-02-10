@@ -50,9 +50,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      # Test environment variables (required for config validation)
-      ONE_MIN_AI_API_KEY: "test-api-key-for-ci-testing"
-      SECRET_KEY: "test-secret-key-for-ci-testing-only-not-production"
+      # Test environment variables (not real secrets, safe for CI)
+      ONE_MIN_AI_API_KEY: "test-api-key-for-ci-testing"  # pragma: allowlist secret
+      SECRET_KEY: "test-secret-key-for-ci-testing-only-not-production"  # pragma: allowlist secret
       APP_ENV: "testing"
       DEBUG: "True"
       RATELIMIT_ENABLED: "False"
@@ -147,8 +147,8 @@ jobs:
       - name: Release Summary
         if: steps.semantic.outputs.new_release_published == 'true'
         run: |
-          echo "🎉 New release: v${{ steps.semantic.outputs.new_release_version }}"
-          echo "## 🚀 Release v${{ steps.semantic.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "New release: v${{ steps.semantic.outputs.new_release_version }}"
+          echo "## Release v${{ steps.semantic.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
   # JOB 4: BUILD VALIDATION (Pull Requests only)
@@ -176,7 +176,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build Summary
-        run: echo "✅ Docker build successful for PR #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+        run: echo "Docker build successful for PR ${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
   # JOB 5: BUILD, SCAN & PUSH (Production)
@@ -276,18 +276,18 @@ jobs:
           COSIGN_EXPERIMENTAL: "1"
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: |
-          echo "🔐 Signing images..."
+          echo "Signing images..."
           cosign sign --yes "${{ env.IMAGE_NAME }}@${DIGEST}"
           cosign sign --yes "ghcr.io/${{ env.GHCR_IMAGE }}@${DIGEST}"
 
       - name: Deployment Summary
         run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: v${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Docker Hub**: \`${{ env.IMAGE_NAME }}:${{ needs.release.outputs.new_release_version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **GHCR**: \`ghcr.io/${{ env.GHCR_IMAGE }}:${{ needs.release.outputs.new_release_version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Signed**: ✅ Cosign" >> $GITHUB_STEP_SUMMARY
-          echo "- **SBOM**: ✅ Generated" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker Hub**: ${{ env.IMAGE_NAME }}:${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **GHCR**: ghcr.io/${{ env.GHCR_IMAGE }}:${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Signed**: Yes (Cosign)" >> $GITHUB_STEP_SUMMARY
+          echo "- **SBOM**: Generated" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
   # JOB 6: NOTIFICATIONS
@@ -303,29 +303,29 @@ jobs:
         run: |
           if [[ "${{ needs.build-and-push.result }}" == "success" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
-            echo "emoji=🎉" >> $GITHUB_OUTPUT
+            echo "emoji=success" >> $GITHUB_OUTPUT
             echo "message=Deployment successful" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.build-and-push.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
-            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "emoji=failure" >> $GITHUB_OUTPUT
             echo "message=Deployment failed" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.test.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
-            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "emoji=failure" >> $GITHUB_OUTPUT
             echo "message=Tests failed" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.lint.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
-            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "emoji=failure" >> $GITHUB_OUTPUT
             echo "message=Lint failed" >> $GITHUB_OUTPUT
           else
             echo "status=skipped" >> $GITHUB_OUTPUT
-            echo "emoji=⏭️" >> $GITHUB_OUTPUT
+            echo "emoji=skipped" >> $GITHUB_OUTPUT
             echo "message=No release triggered" >> $GITHUB_OUTPUT
           fi
 
       - name: Pipeline Report
         run: |
-          echo "## ${{ steps.status.outputs.emoji }} Pipeline Report" >> $GITHUB_STEP_SUMMARY
+          echo "## Pipeline Report - ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
@@ -333,6 +333,6 @@ jobs:
           echo "| Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Security | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Release | ${{ needs.release.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build & Push | ${{ needs.build-and-push.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build and Push | ${{ needs.build-and-push.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
