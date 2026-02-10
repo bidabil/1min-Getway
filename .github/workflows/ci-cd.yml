@@ -2,11 +2,6 @@
 # ==============================================================
 # CI/CD Pipeline - 1min-Gateway (Production-Ready v2.0)
 # ==============================================================
-# - Ruff replaces Black+Flake8+isort+Bandit
-# - Updated action versions
-# - Shared cache between jobs
-# - Coverage consistent with pyproject.toml
-# ==============================================================
 
 name: 1min-Gateway CI/CD
 
@@ -54,6 +49,14 @@ jobs:
   # ==============================================================
   test:
     runs-on: ubuntu-latest
+    env:
+      # Test environment variables (required for config validation)
+      ONE_MIN_AI_API_KEY: "test-api-key-for-ci-testing"
+      SECRET_KEY: "test-secret-key-for-ci-testing-only-not-production"
+      APP_ENV: "testing"
+      DEBUG: "True"
+      RATELIMIT_ENABLED: "False"
+      LOG_LEVEL: "DEBUG"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
