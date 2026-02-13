@@ -377,6 +377,24 @@ jobs:
         with:
           category: "/language:python"
 
+  # ==============================================================
+  # OSV Scanner - Workflow Réutilisable (Recommandé par Google)
+  # ==============================================================
+  osv-scan:
+    name: "🔒 OSV Scanner"
+    needs: init
+    if: |
+      needs.init.outputs.is_draft != 'true' &&
+      (needs.init.outputs.changes_deps == 'true' || github.event_name == 'schedule')
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.3
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      scan-args: |-
+        --recursive
+        ./
+
   security-deps:
     name: "🔒 Dependency Scan"
     needs: init
@@ -412,14 +430,6 @@ jobs:
         run: safety check --json --output=safety.json || true
         continue-on-error: true
 
-      - name: OSV Scanner
-        uses: google/osv-scanner-action@v2
-        continue-on-error: true
-        with:
-          scan-args: |-
-            --recursive
-            .
-
       - name: Upload Security Results
         uses: actions/upload-artifact@v4
         if: always()
@@ -428,7 +438,6 @@ jobs:
           path: |
             pip-audit.json
             safety.json
-            osv-results.json
           retention-days: 30
 
   dependency-review:
@@ -456,7 +465,7 @@ jobs:
   # ==============================================================
   quality-gate:
     name: "✅ Quality Gate"
-    needs: [init, lint, type-check, test, security-sast, security-deps]
+    needs: [init, lint, type-check, test, security-sast, security-deps, osv-scan]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -517,6 +526,15 @@ jobs:
             echo "✅ Dependency Scan: PASSED" >> $GITHUB_STEP_SUMMARY
           else
             echo "⏭️ Dependency Scan: SKIPPED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # OSV Scanner (advisory - logged but doesn't block)
+          if [[ "${{ needs.osv-scan.result }}" == "failure" ]]; then
+            echo "⚠️ OSV Scanner: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.osv-scan.result }}" == "success" ]]; then
+            echo "✅ OSV Scanner: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ OSV Scanner: SKIPPED" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -630,13 +648,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ===========================================
-      # Docker Hub Login (using secrets)
-      # For AWS/GCP/Azure, prefer OIDC:
-      # - AWS: aws-actions/configure-aws-credentials@v4
-      # - GCP: google-github-actions/auth@v2
-      # - Azure: azure/login@v2
-      # ===========================================
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -801,13 +812,6 @@ jobs:
           echo "Deployment method: GitOps (ArgoCD/Flux)" >> $GITHUB_STEP_SUMMARY
           echo "deployed=true" >> $GITHUB_OUTPUT
 
-      # Uncomment for ArgoCD deployment
-      # - name: Update ArgoCD Application
-      #   run: |
-      #     curl -X POST \
-      #       -H "Authorization: Bearer ${{ secrets.ARGOCD_TOKEN }}" \
-      #       "https://argocd.example.com/api/v1/applications/1min-gateway-staging/sync"
-
   # ==============================================================
   # STAGE 8: SMOKE TESTS
   # ==============================================================
@@ -830,7 +834,6 @@ jobs:
           echo "## 🔥 Smoke Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Health endpoint check with retry
           echo "### Health Check" >> $GITHUB_STEP_SUMMARY
           for i in {1..10}; do
             if curl -sf --max-time 10 "https://staging.1min-gateway.example.com/health" > /dev/null 2>&1; then
@@ -938,19 +941,12 @@ jobs:
           echo "✅ Staging smoke tests passed" >> $GITHUB_STEP_SUMMARY
           echo "✅ Production deployment approved" >> $GITHUB_STEP_SUMMARY
 
-      # Uncomment for ArgoCD deployment
-      # - name: Update ArgoCD Application
-      #   run: |
-      #     curl -X POST \
-      #       -H "Authorization: Bearer ${{ secrets.ARGOCD_TOKEN }}" \
-      #       "https://argocd.example.com/api/v1/applications/1min-gateway-production/sync"
-
   # ==============================================================
   # STAGE 10: NOTIFICATION
   # ==============================================================
   notify:
     name: "📢 Notify"
-    needs: [init, lint, type-check, test, security-sast, security-deps, quality-gate, release, build-push, deploy-staging, smoke-test, deploy-production]
+    needs: [init, lint, type-check, test, security-sast, security-deps, osv-scan, quality-gate, release, build-push, deploy-staging, smoke-test, deploy-production]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1012,33 +1008,13 @@ jobs:
           echo "| Quality | Test | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Security | SAST | ${{ needs.security-sast.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Security | Dependencies | ${{ needs.security-deps.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | OSV Scanner | ${{ needs.osv-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gate | Quality Gate | ${{ needs.quality-gate.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Release | Semantic Release | ${{ needs.release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | Build & Push | ${{ needs.build-push.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy | Staging | ${{ needs.deploy-staging.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Test | Smoke Tests | ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy | Production | ${{ needs.deploy-production.result }} |" >> $GITHUB_STEP_SUMMARY
-
-      # Slack notification (uncomment and add SLACK_WEBHOOK_URL secret)
-      # - name: Slack Notification
-      #   if: always()
-      #   uses: slackapi/slack-github-action@v2
-      #   with:
-      #     webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-      #     webhook-type: incoming-webhook
-      #     payload: |
-      #       {
-      #         "text": "Pipeline: ${{ steps.status.outputs.message }}",
-      #         "attachments": [{
-      #           "color": "${{ steps.status.outputs.color }}",
-      #           "fields": [
-      #             {"title": "Repository", "value": "${{ github.repository }}", "short": true},
-      #             {"title": "Branch", "value": "${{ github.ref_name }}", "short": true},
-      #             {"title": "Commit", "value": "${{ needs.init.outputs.sha_short }}", "short": true},
-      #             {"title": "Actor", "value": "${{ github.actor }}", "short": true}
-      #           ]
-      #         }]
-      #       }
 
   # ==============================================================
   # SCHEDULED: OPENSSF SCORECARD
