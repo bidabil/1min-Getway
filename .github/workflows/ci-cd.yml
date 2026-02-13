@@ -412,8 +412,9 @@ jobs:
         run: safety check --json --output=safety.json || true
         continue-on-error: true
 
+      # ✅ CORRECTION: v2 n'existe pas, utiliser v1.9.2
       - name: OSV Scanner
-        uses: google/osv-scanner-action@v2
+        uses: google/osv-scanner-action@v1.9.2
         continue-on-error: true
         with:
           scan-args: |-
