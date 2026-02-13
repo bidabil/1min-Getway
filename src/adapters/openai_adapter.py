@@ -8,13 +8,19 @@ import json
 import logging
 import time
 import uuid
+from collections.abc import Generator
+from typing import Any
 
 from ..infrastructure.token_service import calculate_token
 
 logger = logging.getLogger("1min-gateway.openai-adapter")
 
 
-def transform_response(one_min_response, model_name, prompt_token):
+def transform_response(
+    one_min_response: dict[str, Any],
+    model_name: str,
+    prompt_token: int,
+) -> dict[str, Any]:
     """
     Transforme une réponse non-streaming 1min.ai en format OpenAI.
 
@@ -84,7 +90,11 @@ def transform_response(one_min_response, model_name, prompt_token):
         }
 
 
-def stream_response(response, model_name, prompt_tokens):
+def stream_response(
+    response: Any,
+    model_name: str,
+    prompt_tokens: int,
+) -> Generator[str, None, None]:
     """
     Gère le streaming SSE en transformant les chunks 1min.ai.
 
@@ -127,7 +137,7 @@ def stream_response(response, model_name, prompt_tokens):
             all_chunks_text += content_to_send
 
             # Format OpenAI
-            chunk_data = {
+            chunk_data: dict[str, Any] = {
                 "id": chat_id,
                 "object": "chat.completion.chunk",
                 "created": int(time.time()),
@@ -143,7 +153,7 @@ def stream_response(response, model_name, prompt_tokens):
 
     # Metadata finale avec tokens
     completion_tokens = calculate_token(all_chunks_text, model_name)
-    final_metadata = {
+    final_metadata: dict[str, Any] = {
         "id": chat_id,
         "object": "chat.completion.chunk",
         "created": int(time.time()),

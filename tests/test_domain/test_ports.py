@@ -24,7 +24,7 @@ class TestChatRequest:
         assert request.model == "gpt-4o"
         assert len(request.messages) == 1
         assert request.stream is False  # Default
-        assert request.extra_params is None  # Default
+        assert request.extra_params == {}  # Default (empty dict)
 
     def test_create_with_all_fields(self):
         # Arrange & Act

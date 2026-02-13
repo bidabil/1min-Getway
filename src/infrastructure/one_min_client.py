@@ -6,6 +6,7 @@ Aligné sur la documentation officielle : https://docs.1min.ai/conversation-api
 
 import logging
 import time
+from typing import Any
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -21,7 +22,7 @@ CONVERSATION_API_URL = "https://api.1min.ai/api/conversations"
 def get_retry_session(
     retries: int = 3,
     backoff_factor: float = 0.5,
-    status_forcelist: tuple = (429, 500, 502, 503, 504),
+    status_forcelist: tuple[int, ...] = (429, 500, 502, 503, 504),
 ) -> requests.Session:
     """Crée une session requests avec retry automatique"""
     session = requests.Session()
@@ -41,13 +42,13 @@ def get_retry_session(
 class CircuitBreaker:
     """Circuit breaker pour protéger l'infrastructure"""
 
-    def __init__(self, failure_threshold: int = 5, timeout: int = 60):
+    def __init__(self, failure_threshold: int = 5, timeout: int = 60) -> None:
         self.failure_threshold = failure_threshold
         self.timeout = timeout
         self.failures = 0
         self.opened_at: float | None = None
 
-    def call_failed(self):
+    def call_failed(self) -> None:
         """Enregistre un échec"""
         self.failures += 1
         if self.failures >= self.failure_threshold:
@@ -58,7 +59,7 @@ class CircuitBreaker:
                 self.timeout,
             )
 
-    def call_succeeded(self):
+    def call_succeeded(self) -> None:
         """Réinitialise après succès"""
         if self.failures > 0:
             logger.info("✅ Circuit Breaker réinitialisé")
@@ -82,7 +83,7 @@ _session = get_retry_session()
 _circuit_breaker = CircuitBreaker()
 
 
-def _get_safe_payload(payload: dict) -> dict:
+def _get_safe_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Masque les données sensibles pour le logging"""
     sensitive_keys = {"API-KEY", "TOKEN", "AUTHORIZATION", "PASSWORD"}
     return {k: ("[REDACTED]" if k.upper() in sensitive_keys else v) for k, v in payload.items()}
@@ -129,7 +130,7 @@ def create_1min_conversation(
         }
 
         # Payload selon documentation
-        payload = {
+        payload: dict[str, Any] = {
             "type": conv_type,
             "title": title[:91],  # Maximum 91 characters selon doc
             "model": model,
@@ -197,7 +198,7 @@ def create_1min_conversation(
 
         # Extraction UUID selon structure documentée
         # Response: { "conversation": { "uuid": "...", "title": "...", ... } }
-        conversation_uuid = data.get("conversation", {}).get("uuid")
+        conversation_uuid: str | None = data.get("conversation", {}).get("uuid")
 
         if not conversation_uuid:
             logger.error(f"INFRA | UUID absent de la réponse: {data}")

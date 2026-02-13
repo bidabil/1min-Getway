@@ -5,9 +5,11 @@ Utilise les Use Cases pour la logique métier
 """
 
 import logging
+from typing import Any
 
 import requests
-from flask import Response, jsonify, make_response, request
+from flask import Flask, Response, jsonify, make_response, request
+from flask_limiter import Limiter
 
 from .adapters.openai_adapter import stream_response, transform_response
 from .application.use_cases import Failure, Success
@@ -20,7 +22,7 @@ from .infrastructure.network_service import handle_options_request, set_response
 logger = logging.getLogger("1min-gateway.routes")
 
 
-def extract_api_key(req):
+def extract_api_key(req: request) -> str | None:
     """Extrait la clé API (API-KEY ou Bearer)"""
     api_key = req.headers.get("API-KEY")
     if api_key:
@@ -31,12 +33,12 @@ def extract_api_key(req):
     return None
 
 
-def register_routes(app, limiter):
+def register_routes(app: Flask, limiter: Limiter) -> None:
     """Enregistre les routes Flask"""
 
     @app.route("/v1/chat/completions", methods=["POST", "OPTIONS"])
     @limiter.limit(RATELIMIT_DEFAULT)
-    def conversation():
+    def conversation() -> tuple[Response, int] | Response:
         if request.method == "OPTIONS":
             return handle_options_request()
 
@@ -53,7 +55,7 @@ def register_routes(app, limiter):
             ), 401
 
         # --- 2. EXTRACTION DES DONNÉES ---
-        request_data = request.get_json(silent=True) or {}
+        request_data: dict[str, Any] = request.get_json(silent=True) or {}
 
         chat_request = ChatRequest(
             api_key=api_key,
@@ -73,12 +75,12 @@ def register_routes(app, limiter):
         context = result.data
 
         # --- 4. CALCUL DES TOKENS (Use Case) ---
-        prompt_text = context.prompt_object.get("prompt", "")
+        prompt_text: str = context.prompt_object.get("prompt", "")
         tokens_result = container.calculate_tokens.execute(prompt_text, chat_request.model)
-        prompt_token_count = tokens_result.data if isinstance(tokens_result, Success) else 0
+        prompt_token_count: int = tokens_result.data if isinstance(tokens_result, Success) else 0
 
         # --- 5. APPEL API UPSTREAM ---
-        payload = {
+        payload: dict[str, Any] = {
             "type": context.type,
             "model": chat_request.model,
             "promptObject": context.prompt_object,
@@ -114,13 +116,13 @@ def register_routes(app, limiter):
             return jsonify({"success": False, "error": error_payload}), status
 
     @app.route("/")
-    def health():
+    def health() -> tuple[Response, int]:
         return jsonify({"status": "ok", "architecture": "Clean + Use Cases"}), 200
 
 
-def get_error_response_from_failure(failure: Failure):
+def get_error_response_from_failure(failure: Failure) -> tuple[dict[str, str], int]:
     """Convertit un Failure en réponse d'erreur HTTP"""
-    error_map = {
+    error_map: dict[str, tuple[dict[str, str], int]] = {
         "MODEL_NOT_FOUND": ({"code": failure.error_code, "message": failure.message}, 404),
         "INVALID_REQUEST": ({"code": failure.error_code, "message": failure.message}, 400),
         "UNAUTHORIZED": ({"code": failure.error_code, "message": failure.message}, 401),

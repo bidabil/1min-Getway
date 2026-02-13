@@ -1,18 +1,19 @@
 # domain/image_mapper.py
 import logging
 import time
+from typing import Any
 
 logger = logging.getLogger("1min-gateway.image-mapper")
 
 
-def format_image_generation_response(result_data):
+def format_image_generation_response(result_data: list[Any] | str | Any) -> dict[str, Any]:
     """
     LOGIQUE DE DOMAINE PURE :
     Prend une liste de résultats (URLs ou objets) et les normalise au format OpenAI.
     Ne sait pas ce qu'est 'aiRecord' ou '1min.ai'.
     """
     try:
-        image_urls = []
+        image_urls: list[str] = []
 
         # 1. Normalisation (Logique métier de ton application)
         if isinstance(result_data, list):

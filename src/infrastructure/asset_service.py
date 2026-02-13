@@ -7,6 +7,7 @@ import base64
 import logging
 import uuid
 from io import BytesIO
+from typing import Any
 
 import filetype
 import requests
@@ -17,7 +18,7 @@ logger = logging.getLogger("1min-gateway.asset-service")
 MAX_IMAGE_SIZE = 50 * 1024 * 1024
 
 
-def _decode_base64_image(image_data):
+def _decode_base64_image(image_data: str) -> tuple[bytes, str | None]:
     """Décode une image en base64"""
     header, _, b64 = image_data.partition(",")
     if not b64:
@@ -33,11 +34,11 @@ def _decode_base64_image(image_data):
     except Exception:
         binary_data = base64.urlsafe_b64decode(b64)
 
-    mime_type = header.split(":", 1)[1].split(";", 1)[0] if ";" in header else None
+    mime_type: str | None = header.split(":", 1)[1].split(";", 1)[0] if ";" in header else None
     return binary_data, mime_type
 
 
-def _download_external_image(url):
+def _download_external_image(url: str) -> tuple[bytes, str | None]:
     """Télécharge une image avec limite de taille stricte"""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
@@ -55,7 +56,11 @@ def _download_external_image(url):
     return bytes(buf), response.headers.get("Content-Type")
 
 
-def upload_image_to_1min(item, headers, asset_url):
+def upload_image_to_1min(
+    item: dict[str, Any],
+    headers: dict[str, str],
+    asset_url: str,
+) -> str:
     """
     Upload une image sur l'API Asset de 1min.ai
 
@@ -82,7 +87,7 @@ def upload_image_to_1min(item, headers, asset_url):
     if not api_key:
         raise ValueError("Missing API-KEY header")
 
-    image_data = item["image_url"]["url"]
+    image_data: str = item["image_url"]["url"]
 
     try:
         # Acquisition des données binaires
@@ -125,7 +130,7 @@ def upload_image_to_1min(item, headers, asset_url):
         body = asset_response.json()
 
         # Format 1min.ai : "asset.key" est le chemin
-        path = body.get("asset", {}).get("key")
+        path: str | None = body.get("asset", {}).get("key")
         if not path:
             # Fallback pour compatibilité
             path = body.get("fileContent", {}).get("path")

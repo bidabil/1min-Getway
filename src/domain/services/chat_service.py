@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from ..ports import (
     AssetServicePort,
@@ -22,8 +23,8 @@ class ChatService:
         asset_service: AssetServicePort,
         conversation_service: ConversationServicePort,
         token_service: TokenServicePort,
-        available_models: list,
-    ):
+        available_models: list[str],
+    ) -> None:
         self._asset_service = asset_service
         self._conversation_service = conversation_service
         self._token_service = token_service
@@ -52,7 +53,7 @@ class ChatService:
         content = last_message.get("content", "")
 
         raw_prompt = ""
-        image_paths = []
+        image_paths: list[str] = []
 
         # Extraction du contenu
         if isinstance(content, list):
@@ -82,7 +83,12 @@ class ChatService:
             prompt_object=prompt_object,
         )
 
-    def _determine_type(self, prompt: str, images: list, params: dict) -> str:
+    def _determine_type(
+        self,
+        prompt: str,
+        images: list[str],
+        params: dict[str, Any],
+    ) -> str:
         """Détermine le type de conversation"""
         import re
 
@@ -102,7 +108,11 @@ class ChatService:
         return "CHAT_WITH_AI"
 
     def _resolve_session_id(
-        self, conv_type: str, request: ChatRequest, params: dict, prompt: str
+        self,
+        conv_type: str,
+        request: ChatRequest,
+        params: dict[str, Any],
+        prompt: str,
     ) -> str | None:
         """Résout le session_id selon le type"""
         import re
@@ -137,9 +147,15 @@ class ChatService:
 
         return None
 
-    def _build_prompt_object(self, conv_type: str, prompt: str, images: list, params: dict) -> dict:
+    def _build_prompt_object(
+        self,
+        conv_type: str,
+        prompt: str,
+        images: list[str],
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
         """Construit le promptObject"""
-        prompt_object = {
+        prompt_object: dict[str, Any] = {
             "prompt": prompt,
             "isMixed": bool(params.get("is_mixed", False)),
             "webSearch": bool(params.get("web_search", False)),

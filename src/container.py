@@ -21,7 +21,7 @@ class Container:
     Assemble toutes les dépendances au démarrage
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # --- Infrastructure Adapters ---
         self._asset_adapter = OneMinAssetAdapter(ONE_MIN_ASSET_API_URL)
         self._conversation_adapter = OneMinConversationAdapter()
@@ -59,4 +59,4 @@ class Container:
 
 
 # Singleton
-container = Container()
+container: Container = Container()

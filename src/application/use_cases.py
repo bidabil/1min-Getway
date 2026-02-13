@@ -5,7 +5,7 @@ Chaque use case = une action utilisateur
 """
 
 from dataclasses import dataclass
-from typing import Union
+from typing import Any, Union
 
 from ..domain.ports import ChatRequest
 from ..domain.services.chat_service import ChatService
@@ -18,7 +18,7 @@ from ..domain.services.chat_service import ChatService
 class Success:
     """Résultat réussi"""
 
-    data: any
+    data: Any
 
 
 @dataclass
@@ -45,7 +45,7 @@ class ChatCompletionUseCase:
     - Gestion des erreurs métier
     """
 
-    def __init__(self, chat_service: ChatService):
+    def __init__(self, chat_service: ChatService) -> None:
         self._chat_service = chat_service
 
     def execute(self, request: ChatRequest) -> Result:
@@ -106,7 +106,7 @@ class ValidateApiKeyUseCase:
 class CalculateTokensUseCase:
     """Use Case : Calculer les tokens"""
 
-    def __init__(self, chat_service: ChatService):
+    def __init__(self, chat_service: ChatService) -> None:
         self._chat_service = chat_service
 
     def execute(self, text: str, model: str) -> Result:

@@ -2,7 +2,8 @@
 # src/domain/ports.py - INTERFACES (Contrats)
 # ============================================================================
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -12,7 +13,7 @@ class ConversationContext:
     type: str
     session_id: str | None
     image_paths: list[str]
-    prompt_object: dict
+    prompt_object: dict[str, Any]
 
 
 @dataclass
@@ -21,16 +22,16 @@ class ChatRequest:
 
     api_key: str
     model: str
-    messages: list
+    messages: list[dict[str, Any]]
     stream: bool = False
-    extra_params: dict = None
+    extra_params: dict[str, Any] = field(default_factory=dict)
 
 
 class AssetServicePort(ABC):
     """Interface pour le service d'assets"""
 
     @abstractmethod
-    def upload_image(self, image_data: dict, api_key: str) -> str | None:
+    def upload_image(self, image_data: dict[str, Any], api_key: str) -> str | None:
         """Upload une image et retourne son chemin"""
         pass
 
@@ -59,9 +60,9 @@ class AIFeatureServicePort(ABC):
     def call_feature(
         self,
         api_key: str,
-        payload: dict,
+        payload: dict[str, Any],
         stream: bool = False,
-    ):
+    ) -> Any:
         """Appelle l'API AI Feature"""
         pass
 

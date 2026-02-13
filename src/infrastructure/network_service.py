@@ -5,14 +5,14 @@ Network service for handling HTTP requests and responses.
 import logging
 import uuid
 
-from flask import make_response
+from flask import Response, make_response
 
 from ..config import CORS_ORIGINS
 
 logger = logging.getLogger("1min-gateway.network-service")
 
 
-def handle_options_request():
+def handle_options_request() -> tuple[Response, int]:
     """
     Handle CORS preflight requests.
     """
@@ -27,7 +27,7 @@ def handle_options_request():
     return response, 204
 
 
-def set_response_headers(response):
+def set_response_headers(response: Response) -> Response:
     """
     Apply standard security and tracking headers to JSON responses.
     """

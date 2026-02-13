@@ -5,11 +5,16 @@ Format conforme à la documentation officielle : https://docs.1min.ai
 """
 
 import logging
+from typing import Any
 
 logger = logging.getLogger("1min-gateway.error-service")
 
 
-def get_error_response(code, model=None, key=None):
+def get_error_response(
+    code: int,
+    model: str | None = None,
+    key: str | None = None,
+) -> tuple[dict[str, Any], int]:
     """
     Gère les erreurs et les retourne au format JSON structuré.
 
@@ -22,7 +27,7 @@ def get_error_response(code, model=None, key=None):
         }
     }
     """
-    error_codes = {
+    error_codes: dict[int, dict[str, Any]] = {
         # Erreurs de validation
         1002: {
             "code": "MODEL_NOT_FOUND",
@@ -108,10 +113,10 @@ def get_error_response(code, model=None, key=None):
         },
     )
 
-    http_status = raw_error.get("http_code", 400)
+    http_status: int = raw_error.get("http_code", 400)
 
     # Format conforme à la doc 1min.ai
-    error_payload = {
+    error_payload: dict[str, Any] = {
         "code": raw_error["code"],
         "message": raw_error["message"],
     }

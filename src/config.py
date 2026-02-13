@@ -91,9 +91,9 @@ CORS_ORIGINS: Final[str] = os.getenv("CORS_ORIGINS", "*")
 # ============================================================================
 # VALIDATION DE LA CONFIGURATION
 # ============================================================================
-def validate_config():
+def validate_config() -> None:
     """Valide la configuration au démarrage"""
-    errors = []
+    errors: list[str] = []
 
     # Vérification de la clé API
     if not ONE_MIN_AI_API_KEY:
@@ -118,7 +118,7 @@ def validate_config():
     logger.info("✅ Configuration validée avec succès")
 
 
-def print_config_summary():
+def print_config_summary() -> None:
     """Affiche un résumé de la configuration au démarrage"""
     mode = "SUBSET" if PERMIT_MODELS_FROM_SUBSET_ONLY else "TOUS"
 

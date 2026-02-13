@@ -16,16 +16,19 @@ from .config import MEMCACHED_HOST, MEMCACHED_PORT, RATELIMIT_STORAGE_URL
 warnings.filterwarnings("ignore", category=UserWarning, module="flask_limiter.extension")
 
 
-def check_memcached_connection(host=None, port=None):
+def check_memcached_connection(
+    host: str | None = None,
+    port: int | None = None,
+) -> bool:
     """
     Vérifie la disponibilité de Memcached.
     Utilise les valeurs de config.py si non spécifiées.
     """
-    host = host or MEMCACHED_HOST
-    port = port or MEMCACHED_PORT
+    effective_host: str = host or MEMCACHED_HOST
+    effective_port: int = port or MEMCACHED_PORT
 
     try:
-        client = Client((host, port), connect_timeout=2, timeout=2)
+        client = Client((effective_host, effective_port), connect_timeout=2, timeout=2)
         client.set("health_check", "ok")
         result = client.get("health_check")
         return result == b"ok"
@@ -33,7 +36,7 @@ def check_memcached_connection(host=None, port=None):
         return False
 
 
-def create_app():
+def create_app() -> tuple[Flask, logging.Logger, Limiter]:
     """Application Factory: Initialise Flask, Logging et Rate Limiting"""
     app = Flask(__name__)
 
@@ -75,11 +78,12 @@ def create_app():
     )
 
     # --- RATE LIMITER CONFIGURATION ---
+    limiter: Limiter
     if check_memcached_connection():
         limiter = Limiter(
             get_remote_address,
             app=app,
-            storage_uri=RATELIMIT_STORAGE_URL,  # ✅ Depuis config.py
+            storage_uri=RATELIMIT_STORAGE_URL,
             strategy="fixed-window",
         )
         logger.info("LIMITER | Backend: Memcached (Distribué) ✅")

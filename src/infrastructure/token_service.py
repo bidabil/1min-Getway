@@ -13,7 +13,7 @@ from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 logger = logging.getLogger("1min-gateway.token-service")
 
 
-def calculate_token(sentence, model="gpt-4o"):
+def calculate_token(sentence: str, model: str = "gpt-4o") -> int:
     """
     Calculate tokens based on model family.
 
