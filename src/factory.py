@@ -31,7 +31,7 @@ def check_memcached_connection(
         client = Client((effective_host, effective_port), connect_timeout=2, timeout=2)
         client.set("health_check", "ok")
         result = client.get("health_check")
-        return result == b"ok"
+        return bool(result == b"ok")
     except Exception:
         return False
 

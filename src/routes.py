@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 import requests
-from flask import Flask, Response, jsonify, make_response, request
+from flask import Flask, Request, Response, jsonify, make_response, request
 from flask_limiter import Limiter
 
 from .adapters.openai_adapter import stream_response, transform_response
@@ -22,12 +22,12 @@ from .infrastructure.network_service import handle_options_request, set_response
 logger = logging.getLogger("1min-gateway.routes")
 
 
-def extract_api_key(req: request) -> str | None:
+def extract_api_key(req: Request) -> str | None:
     """Extrait la clé API (API-KEY ou Bearer)"""
-    api_key = req.headers.get("API-KEY")
+    api_key: str | None = req.headers.get("API-KEY")
     if api_key:
         return api_key
-    auth_header = req.headers.get("Authorization", "")
+    auth_header: str = req.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         return auth_header[7:]
     return None
@@ -44,6 +44,15 @@ def register_routes(app: Flask, limiter: Limiter) -> None:
 
         # --- 1. AUTHENTIFICATION (Use Case) ---
         api_key = extract_api_key(request)
+
+        if api_key is None:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": {"code": "UNAUTHORIZED", "message": "API key is required"},
+                }
+            ), 401
+
         auth_result = container.validate_api_key.execute(api_key)
 
         if isinstance(auth_result, Failure):
@@ -88,7 +97,7 @@ def register_routes(app: Flask, limiter: Limiter) -> None:
         if context.session_id:
             payload["conversationId"] = context.session_id
 
-        headers = {"API-KEY": api_key, "Content-Type": "application/json"}
+        headers: dict[str, str] = {"API-KEY": api_key, "Content-Type": "application/json"}
 
         try:
             if not chat_request.stream:
