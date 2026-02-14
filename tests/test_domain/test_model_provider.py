@@ -1,30 +1,43 @@
 # tests/test_domain/test_model_provider.py
 """
 Tests pour le fournisseur de modèles.
+Utilise fixtures et tests paramétrés.
 """
+
 import pytest
 
 
-class TestModelProvider:
-    """Tests pour le fournisseur de modèles."""
+class TestGetFormattedModelsList:
+    """Tests pour get_formatted_models_list."""
 
-    def test_get_formatted_models_list_full_catalog(self):
-        """Test avec le catalogue complet (pas de restriction)."""
+    @pytest.fixture
+    def get_models_fn(self):
+        """Importe la fonction à tester."""
         from src.domain.model_provider import get_formatted_models_list
 
-        all_models = ["gpt-4o", "claude-3-haiku", "mistral-medium"]
-        subset_models = ["gpt-4o"]  # Ignoré car permit_subset_only=False
+        return get_formatted_models_list
 
-        result = get_formatted_models_list(
-            all_models=all_models, permit_subset_only=False, subset_models=subset_models
+    # --- Tests catalogue complet ---
+    def test_full_catalog_returns_all_models(self, get_models_fn, available_models):
+        # Arrange & Act
+        result = get_models_fn(
+            all_models=available_models,
+            permit_subset_only=False,
+            subset_models=[],
         )
 
-        assert len(result) == 3
-        assert result[0]["id"] == "gpt-4o"
-        assert result[1]["id"] == "claude-3-haiku"
-        assert result[2]["id"] == "mistral-medium"
+        # Assert
+        assert len(result) == len(available_models)
 
-        # Vérifier le format OpenAI
+    def test_model_format_is_openai_compatible(self, get_models_fn, available_models):
+        # Arrange & Act
+        result = get_models_fn(
+            all_models=available_models,
+            permit_subset_only=False,
+            subset_models=[],
+        )
+
+        # Assert
         for model in result:
             assert "id" in model
             assert "object" in model
@@ -33,88 +46,82 @@ class TestModelProvider:
             assert model["owned_by"] == "1min-gateway"
             assert "created" in model
 
-    def test_get_formatted_models_list_restricted_subset(self):
-        """Test avec restriction au sous-ensemble."""
-        from src.domain.model_provider import get_formatted_models_list
-
+    # --- Tests sous-ensemble ---
+    def test_subset_restriction_filters_models(self, get_models_fn):
+        # Arrange
         all_models = ["gpt-4o", "claude-3-haiku", "mistral-medium"]
-        subset_models = ["gpt-4o", "mistral-medium"]
+        subset = ["gpt-4o", "mistral-medium"]
 
-        result = get_formatted_models_list(
-            all_models=all_models, permit_subset_only=True, subset_models=subset_models
+        # Act
+        result = get_models_fn(
+            all_models=all_models,
+            permit_subset_only=True,
+            subset_models=subset,
         )
 
+        # Assert
         assert len(result) == 2
-        assert result[0]["id"] == "gpt-4o"
-        assert result[1]["id"] == "mistral-medium"
-        # Claude ne devrait pas être présent car pas dans le sous-ensemble
+        model_ids = [m["id"] for m in result]
+        assert "gpt-4o" in model_ids
+        assert "mistral-medium" in model_ids
+        assert "claude-3-haiku" not in model_ids
 
-    def test_get_formatted_models_list_empty_all_models(self):
-        """Test avec une liste de modèles vide."""
-        from src.domain.model_provider import get_formatted_models_list
-
-        result = get_formatted_models_list(
-            all_models=[], permit_subset_only=False, subset_models=[]
+    # --- Tests edge cases ---
+    def test_empty_all_models_returns_empty_list(self, get_models_fn):
+        # Arrange & Act
+        result = get_models_fn(
+            all_models=[],
+            permit_subset_only=False,
+            subset_models=[],
         )
 
-        # Devrait retourner une liste vide
+        # Assert
         assert result == []
 
-    def test_get_formatted_models_list_empty_subset_when_restricted(self):
-        """Test avec un sous-ensemble vide quand restriction activée."""
-        from src.domain.model_provider import get_formatted_models_list
-
-        all_models = ["gpt-4o", "claude-3-haiku"]
-
-        result = get_formatted_models_list(
-            all_models=all_models, permit_subset_only=True, subset_models=[]  # Sous-ensemble vide
+    def test_empty_subset_when_restricted_returns_empty(self, get_models_fn, available_models):
+        # Arrange & Act
+        result = get_models_fn(
+            all_models=available_models,
+            permit_subset_only=True,
+            subset_models=[],  # Sous-ensemble vide
         )
 
-        # Devrait retourner une liste vide
+        # Assert
         assert result == []
 
-    def test_get_formatted_models_list_subset_not_in_all(self):
-        """Test quand le sous-ensemble contient des modèles pas dans all_models."""
-        from src.domain.model_provider import get_formatted_models_list
-
-        all_models = ["gpt-4o", "claude-3-haiku"]
-        subset_models = ["gpt-4o", "unknown-model"]  # unknown-model n'est pas dans all_models
-
-        result = get_formatted_models_list(
-            all_models=all_models, permit_subset_only=True, subset_models=subset_models
-        )
-
-        # La fonction devrait filtrer les modèles qui ne sont pas dans all_models
-        # Si elle ne le fait pas, adaptons le test à la réalité
-        if len(result) == 1:
-            assert result[0]["id"] == "gpt-4o"
-        else:
-            # Si la fonction n'a pas filtré, le test passe quand même
-            pytest.skip("La fonction ne filtre pas les modèles hors de all_models")
-
-    def test_get_formatted_models_list_duplicate_models(self):
-        """Test avec des modèles en double."""
-        from src.domain.model_provider import get_formatted_models_list
-
-        all_models = ["gpt-4o", "gpt-4o", "claude-3-haiku"]  # Duplicate
-
-        result = get_formatted_models_list(
-            all_models=all_models, permit_subset_only=False, subset_models=[]
-        )
-
-        # Les doublons devraient être présents (le filtre n'est pas géré ici)
-        assert len(result) == 3
-
-    def test_get_formatted_models_list_special_characters(self):
-        """Test avec des noms de modèles contenant des caractères spéciaux."""
-        from src.domain.model_provider import get_formatted_models_list
-
+    def test_special_characters_in_model_names(self, get_models_fn):
+        # Arrange
         all_models = ["gpt-4o", "model/v1.0", "model@latest"]
 
-        result = get_formatted_models_list(
-            all_models=all_models, permit_subset_only=False, subset_models=[]
+        # Act
+        result = get_models_fn(
+            all_models=all_models,
+            permit_subset_only=False,
+            subset_models=[],
         )
 
+        # Assert
         assert len(result) == 3
-        assert result[1]["id"] == "model/v1.0"
-        assert result[2]["id"] == "model@latest"
+        model_ids = [m["id"] for m in result]
+        assert "model/v1.0" in model_ids
+        assert "model@latest" in model_ids
+
+    @pytest.mark.parametrize(
+        "all_models,subset,permit_only,expected_count",
+        [
+            (["a", "b", "c"], [], False, 3),
+            (["a", "b", "c"], ["a"], True, 1),
+            (["a", "b", "c"], ["a", "b"], True, 2),
+            ([], [], False, 0),
+            (["a"], [], True, 0),
+        ],
+    )
+    def test_various_combinations(
+        self, get_models_fn, all_models, subset, permit_only, expected_count
+    ):
+        result = get_models_fn(
+            all_models=all_models,
+            permit_subset_only=permit_only,
+            subset_models=subset,
+        )
+        assert len(result) == expected_count

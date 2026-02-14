@@ -2,109 +2,168 @@
 """
 Tests pour le service de gestion des assets (images).
 """
-import base64
-import json
+
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-# Test data
-SAMPLE_IMAGE_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-SAMPLE_IMAGE_URL = "https://example.com/image.jpg"
+import requests
 
 
-class TestAssetService:
-    """Tests pour le service d'assets."""
+class TestDecodeBase64Image:
+    """Tests pour _decode_base64_image."""
 
-    def test_decode_base64_image_success(self):
-        """Test le décodage d'une image base64."""
+    @pytest.fixture
+    def decode_fn(self):
         from src.infrastructure.asset_service import _decode_base64_image
 
-        binary_data, mime_type = _decode_base64_image(SAMPLE_IMAGE_BASE64)
+        return _decode_base64_image
 
+    def test_decodes_valid_png_image(self, decode_fn, sample_base64_image):
+        binary_data, mime_type = decode_fn(sample_base64_image)
         assert isinstance(binary_data, bytes)
         assert len(binary_data) > 0
         assert mime_type == "image/png"
 
-    def test_decode_base64_image_invalid(self):
-        """Test avec une URI base64 invalide."""
-        from src.infrastructure.asset_service import _decode_base64_image
+    def test_decodes_jpeg_image(self, decode_fn):
+        jpeg_base64 = "data:image/jpeg;base64,/9j/4AAQSkZJRg=="
+        binary_data, mime_type = decode_fn(jpeg_base64)
+        assert mime_type == "image/jpeg"
 
+    def test_raises_error_for_invalid_uri(self, decode_fn):
+        invalid_data = "invalid-data-uri"
         with pytest.raises(ValueError, match="Invalid data URI"):
-            _decode_base64_image("invalid-data")
+            decode_fn(invalid_data)
 
-    @patch("src.infrastructure.asset_service.requests.get")
-    def test_download_external_image_success(self, mock_get):
-        """Test le téléchargement d'une image externe."""
+    def test_raises_error_for_missing_base64_prefix(self, decode_fn):
+        invalid_data = "data:image/png,notbase64"
+        with pytest.raises(ValueError):
+            decode_fn(invalid_data)
+
+
+class TestDownloadExternalImage:
+    """Tests pour _download_external_image."""
+
+    @pytest.fixture
+    def download_fn(self):
         from src.infrastructure.asset_service import _download_external_image
 
-        # Mock la réponse HTTP
+        return _download_external_image
+
+    @patch("src.infrastructure.asset_service.requests.get")
+    def test_downloads_image_successfully(self, mock_get, download_fn, sample_external_image_url):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.iter_content.return_value = [b"fake-image-data"]
         mock_response.headers = {"Content-Type": "image/jpeg"}
         mock_get.return_value = mock_response
 
-        binary_data, mime_type = _download_external_image(SAMPLE_IMAGE_URL)
+        binary_data, mime_type = download_fn(sample_external_image_url)
 
-        assert isinstance(binary_data, bytes)
         assert binary_data == b"fake-image-data"
         assert mime_type == "image/jpeg"
         mock_get.assert_called_once()
 
     @patch("src.infrastructure.asset_service.requests.get")
-    def test_download_external_image_too_large(self, mock_get):
-        """Test le rejet d'une image trop volumineuse."""
-        from src.infrastructure.asset_service import MAX_IMAGE_SIZE, _download_external_image
+    def test_raises_error_for_large_image(self, mock_get, download_fn, sample_external_image_url):
+        from src.infrastructure.asset_service import MAX_IMAGE_SIZE
 
-        # Mock une image trop grande
         mock_response = MagicMock()
         mock_response.status_code = 200
-        # Simuler beaucoup de données
         mock_response.iter_content.return_value = [b"x" * (MAX_IMAGE_SIZE + 1)]
         mock_get.return_value = mock_response
 
         with pytest.raises(ValueError, match="FILE_TOO_LARGE_413"):
-            _download_external_image(SAMPLE_IMAGE_URL)
+            download_fn(sample_external_image_url)
+
+    @patch("src.infrastructure.asset_service.requests.get")
+    def test_handles_http_error(self, mock_get, download_fn, sample_external_image_url):
+        # B017 fix: utiliser une exception spécifique
+        mock_get.side_effect = requests.RequestException("Connection failed")
+        with pytest.raises(requests.RequestException):
+            download_fn(sample_external_image_url)
+
+
+class TestUploadImageTo1min:
+    """Tests pour upload_image_to_1min."""
+
+    @pytest.fixture
+    def upload_fn(self):
+        from src.infrastructure.asset_service import upload_image_to_1min
+
+        return upload_image_to_1min
 
     @patch("src.infrastructure.asset_service.requests.post")
     @patch("src.infrastructure.asset_service.filetype.guess")
-    def test_upload_image_to_1min_base64(self, mock_guess, mock_post):
-        """Test l'upload d'une image base64 vers 1min.ai."""
-        from src.infrastructure.asset_service import upload_image_to_1min
-
-        # Mock filetype
+    def test_uploads_base64_image_successfully(
+        self, mock_guess, mock_post, upload_fn, sample_base64_image, valid_api_key
+    ):
         mock_kind = MagicMock()
         mock_kind.mime = "image/png"
         mock_guess.return_value = mock_kind
 
-        # Mock la réponse de l'API
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"fileContent": {"path": "/uploads/test-image.png"}}
+        mock_response.json.return_value = {"fileContent": {"path": "/uploads/test.png"}}
         mock_post.return_value = mock_response
 
-        # Données de test
-        item = {"image_url": {"url": SAMPLE_IMAGE_BASE64}}
-        headers = {"API-KEY": "test-key", "Authorization": "Bearer test-key"}
+        item = {"image_url": {"url": sample_base64_image}}
+        headers = {"API-KEY": valid_api_key, "Authorization": f"Bearer {valid_api_key}"}
 
-        result = upload_image_to_1min(item, headers, "https://api.example.com/assets")
+        result = upload_fn(item, headers, "https://api.example.com/assets")
 
-        assert result == "/uploads/test-image.png"
+        assert result == "/uploads/test.png"
         mock_post.assert_called_once()
 
-    def test_upload_image_to_1min_invalid_item(self):
-        """Test avec un item invalide."""
-        from src.infrastructure.asset_service import upload_image_to_1min
-
+    def test_raises_error_for_invalid_item(self, upload_fn):
+        invalid_item = {}
         with pytest.raises(ValueError, match="Invalid 'item' structure"):
-            upload_image_to_1min({}, {}, "https://api.example.com/assets")
+            upload_fn(invalid_item, {}, "https://api.example.com")
 
-    def test_upload_image_to_1min_invalid_headers(self):
-        """Test avec des headers invalides."""
-        from src.infrastructure.asset_service import upload_image_to_1min
+    def test_raises_error_for_missing_auth_header(self, upload_fn, sample_base64_image):
+        item = {"image_url": {"url": sample_base64_image}}
+        headers = {}
+        with pytest.raises(ValueError, match="Missing API-KEY header"):
+            upload_fn(item, headers, "https://api.example.com")
 
-        item = {"image_url": {"url": SAMPLE_IMAGE_BASE64}}
+    @patch("src.infrastructure.asset_service.requests.post")
+    @patch("src.infrastructure.asset_service.filetype.guess")
+    def test_raises_error_on_api_error(
+        self, mock_guess, mock_post, upload_fn, sample_base64_image, valid_api_key
+    ):
+        """Test que le service lève une erreur quand l'API renvoie une réponse invalide."""
+        mock_kind = MagicMock()
+        mock_kind.mime = "image/png"
+        mock_guess.return_value = mock_kind
 
-        with pytest.raises(ValueError, match="Missing or invalid Authorization header"):
-            upload_image_to_1min(item, {}, "https://api.example.com/assets")
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        mock_response.json.return_value = {}
+        mock_post.return_value = mock_response
+
+        item = {"image_url": {"url": sample_base64_image}}
+        headers = {"API-KEY": valid_api_key, "Authorization": f"Bearer {valid_api_key}"}
+
+        with pytest.raises(ValueError, match="Invalid API response"):
+            upload_fn(item, headers, "https://api.example.com/assets")
+
+    @patch("src.infrastructure.asset_service.requests.post")
+    @patch("src.infrastructure.asset_service.filetype.guess")
+    def test_raises_error_for_missing_file_content(
+        self, mock_guess, mock_post, upload_fn, sample_base64_image, valid_api_key
+    ):
+        """Test quand la réponse ne contient pas fileContent."""
+        mock_kind = MagicMock()
+        mock_kind.mime = "image/png"
+        mock_guess.return_value = mock_kind
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"error": "something went wrong"}
+        mock_post.return_value = mock_response
+
+        item = {"image_url": {"url": sample_base64_image}}
+        headers = {"API-KEY": valid_api_key, "Authorization": f"Bearer {valid_api_key}"}
+
+        with pytest.raises(ValueError, match="Invalid API response"):
+            upload_fn(item, headers, "https://api.example.com/assets")

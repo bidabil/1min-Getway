@@ -1,3 +1,4 @@
+
 // ============================================================
 // Commitlint Configuration - Gitmoji Compatible
 // ============================================================
@@ -34,20 +35,20 @@ module.exports = {
       ['sentence-case', 'start-case', 'pascal-case', 'upper-case']
     ],
 
-    // Scopes autorisés (correspondant à config.json)
+    // Scopes autorisés - Tous en PascalCase (Standard Enterprise)
     'scope-enum': [
       2,
       'always',
       [
-        'Core',
-        'Gateway',
-        'Docker',
-        'Config',
-        'Logging',
-        'CI/CD',
-        'deps',      // Pour Dependabot
-        'deps-dev',  // Pour Dependabot dev dependencies
-        'release'    // Pour les releases automatiques
+        'Core',       // Logique métier principale
+        'Gateway',    // API Gateway
+        'Docker',     // Containerisation
+        'Config',     // Configuration
+        'Logging',    // Système de logs
+        'Cicd',       // CI/CD pipelines
+        'Deps',       // Dépendances (Dependabot)
+        'DepsDev',    // Dépendances dev (Dependabot)
+        'Release'     // Releases automatiques
       ]
     ],
     'scope-case': [2, 'always', 'pascal-case'],
@@ -77,6 +78,7 @@ module.exports = {
   ignores: [
     (message) => message.includes('[skip ci]'),
     (message) => message.includes('chore(release)'),
+    (message) => message.includes('chore(Release)'),
     (message) => message.startsWith('Merge'),
     (message) => message.startsWith('Initial commit')
   ],
@@ -145,7 +147,7 @@ module.exports = {
         }
       },
       scope: {
-        description: 'What is the scope of this change (e.g. Core, Gateway, Docker)'
+        description: 'What is the scope of this change (e.g. Core, Gateway, Docker, Cicd)'
       },
       subject: {
         description: 'Write a short, imperative tense description of the change'

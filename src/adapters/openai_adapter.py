@@ -1,28 +1,54 @@
-# src/adapters/openai_adapter.py
+# openai_adapter.py
+"""
+Adaptateur pour transformer les réponses 1min.ai au format OpenAI
+Aligné sur la documentation officielle : https://docs.1min.ai
+"""
 
 import json
 import logging
 import time
 import uuid
+from collections.abc import Generator
+from typing import Any
 
 from ..infrastructure.token_service import calculate_token
 
-# Logger pour la couche de transformation
 logger = logging.getLogger("1min-gateway.openai-adapter")
 
 
-def transform_response(one_min_response, model_name, prompt_token):
+def transform_response(
+    one_min_response: dict[str, Any],
+    model_name: str,
+    prompt_token: int,
+) -> dict[str, Any]:
     """
-    Transforme une réponse non-streaming 1min.ai en objet OpenAI Chat Completion.
+    Transforme une réponse non-streaming 1min.ai en format OpenAI.
+
+    Structure documentée de la réponse 1min.ai :
+    {
+        "aiRecord": {
+            "aiRecordDetail": {
+                "resultObject": ["contenu..."]
+            }
+        }
+    }
     """
     try:
-        # Extraction sécurisée selon la structure imbriquée de 1min.ai
-        result_list = (
-            one_min_response.get("aiRecord", {}).get("aiRecordDetail", {}).get("resultObject", [])
-        )
-        content = result_list[0] if result_list else "Error: No response content from provider."
+        # Extraction selon structure documentée
+        ai_record = one_min_response.get("aiRecord", {})
+        ai_record_detail = ai_record.get("aiRecordDetail", {})
+        result_list = ai_record_detail.get("resultObject", [])
 
-        completion_token = calculate_token(content)
+        # Le contenu est dans resultObject (array)
+        if isinstance(result_list, list) and result_list:
+            content = result_list[0]
+        elif isinstance(result_list, str):
+            content = result_list
+        else:
+            content = "Error: No response content."
+            logger.warning(f"ADAPTER | resultObject vide ou invalide: {result_list}")
+
+        completion_token = calculate_token(content, model_name)
 
         return {
             "id": f"chatcmpl-{uuid.uuid4()}",
@@ -43,62 +69,91 @@ def transform_response(one_min_response, model_name, prompt_token):
             },
         }
     except Exception as e:
-        logger.error(f"ADAPTER | Erreur Transformation (Non-stream): {str(e)}")
-        return {"error": "Failed to transform 1min.ai response"}
+        logger.error(f"ADAPTER | Erreur transformation: {str(e)}")
+        return {
+            "id": f"chatcmpl-{uuid.uuid4()}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": model_name,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": f"Error: {str(e)}"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": prompt_token,
+                "completion_tokens": 0,
+                "total_tokens": prompt_token,
+            },
+        }
 
 
-def stream_response(response, model_name, prompt_tokens):
+def stream_response(
+    response: Any,
+    model_name: str,
+    prompt_tokens: int,
+) -> Generator[str, None, None]:
     """
-    Gère le streaming SSE en nettoyant les chunks de 1min.ai.
-    Supporte les formats: Texte brut, JSON par chunk, et préfixes 'data:'.
+    Gère le streaming SSE en transformant les chunks 1min.ai.
+
+    Selon la doc : "For streaming features like chat, responses are
+    streamed in real-time"
     """
     all_chunks_text = ""
     chat_id = f"chatcmpl-{uuid.uuid4()}"
 
-    # On itère sur les lignes du flux (plus sûr pour le SSE)
-    for line in response.iter_lines():
-        if not line:
-            continue
+    try:
+        for line in response.iter_lines():
+            if not line:
+                continue
 
-        decoded_line = line.decode("utf-8", errors="ignore").strip()
+            decoded_line = line.decode("utf-8", errors="ignore").strip()
 
-        # 1. Nettoyage du préfixe "data: " si 1min.ai l'envoie déjà
-        if decoded_line.startswith("data: "):
-            decoded_line = decoded_line[6:]
+            # Nettoyage du préfixe "data: " si présent
+            if decoded_line.startswith("data: "):
+                decoded_line = decoded_line[6:]
 
-        if decoded_line == "[DONE]":
-            break
+            if decoded_line == "[DONE]":
+                break
 
-        content_to_send = ""
+            if not decoded_line:
+                continue
 
-        # 2. Tentative de décodage JSON (si le chunk est un objet)
-        try:
-            data = json.loads(decoded_line)
-            # Selon la doc 1min.ai, le texte peut être dans 'result' ou directement à la racine
-            content_to_send = data.get("result", data.get("content", ""))
-        except json.JSONDecodeError:
-            # Si ce n't pas du JSON, c'est du texte brut
-            content_to_send = decoded_line
+            content_to_send = ""
 
-        if not content_to_send:
-            continue
+            # Tentative de parsing JSON
+            try:
+                data = json.loads(decoded_line)
+                content_to_send = data.get("result", data.get("content", ""))
+            except json.JSONDecodeError:
+                # Texte brut (selon doc : streamed in real-time)
+                content_to_send = decoded_line
 
-        all_chunks_text += content_to_send
+            if not content_to_send:
+                continue
 
-        # 3. Formatage pour OpenAI
-        chunk_data = {
-            "id": chat_id,
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": model_name,
-            "choices": [{"index": 0, "delta": {"content": content_to_send}, "finish_reason": None}],
-        }
-        yield f"data: {json.dumps(chunk_data)}\n\n"
+            all_chunks_text += content_to_send
 
-    # 4. Envoi des métadonnées finales (Tokens)
-    completion_tokens = calculate_token(all_chunks_text)
+            # Format OpenAI
+            chunk_data: dict[str, Any] = {
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": model_name,
+                "choices": [
+                    {"index": 0, "delta": {"content": content_to_send}, "finish_reason": None}
+                ],
+            }
+            yield f"data: {json.dumps(chunk_data)}\n\n"
 
-    final_metadata = {
+    except Exception as e:
+        logger.error(f"ADAPTER | Erreur streaming: {str(e)}")
+
+    # Metadata finale avec tokens
+    completion_tokens = calculate_token(all_chunks_text, model_name)
+    final_metadata: dict[str, Any] = {
         "id": chat_id,
         "object": "chat.completion.chunk",
         "created": int(time.time()),
@@ -110,6 +165,5 @@ def stream_response(response, model_name, prompt_tokens):
             "total_tokens": prompt_tokens + completion_tokens,
         },
     }
-
     yield f"data: {json.dumps(final_metadata)}\n\n"
     yield "data: [DONE]\n\n"

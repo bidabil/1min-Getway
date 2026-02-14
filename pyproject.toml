@@ -1,9 +1,7 @@
-# ============================================================
+
+# ==============================================================
 # pyproject.toml - Configuration centralisée des outils
-# ============================================================
-# Ce fichier centralise la configuration de tous les outils Python
-# utilisés dans le projet (Black, isort, Bandit, pytest, etc.)
-# ============================================================
+# ==============================================================
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -28,9 +26,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-# ============================================================
-# BLACK - Code formatter
-# ============================================================
+# ==============================================================
+# BLACK - Code formatter (gardé pour compatibilité)
+# ==============================================================
 [tool.black]
 line-length = 100
 target-version = ['py312']
@@ -51,9 +49,9 @@ exclude = '''
 )/
 '''
 
-# ============================================================
-# ISORT - Import sorting
-# ============================================================
+# ==============================================================
+# ISORT - Import sorting (gardé pour compatibilité)
+# ==============================================================
 [tool.isort]
 profile = "black"
 line_length = 100
@@ -72,9 +70,9 @@ skip = [
     "logs",
 ]
 
-# ============================================================
+# ==============================================================
 # PYTEST - Test framework
-# ============================================================
+# ==============================================================
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
@@ -82,25 +80,28 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "-ra",                    # Show all test outcomes
-    "--strict-markers",       # Strict marker checking
-    "--strict-config",        # Strict config checking
-    "--showlocals",           # Show local variables in tracebacks
-    "--tb=short",             # Short traceback format
-    "--cov=.",                # Coverage for all files
-    "--cov-report=term-missing",  # Show missing lines
-    "--cov-report=html",      # Generate HTML report
-    "--cov-report=xml",       # Generate XML for CI/CD
-    "--cov-fail-under=75",    # Fail if coverage < 75%
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+    "--tb=short",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=75",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
 ]
+filterwarnings = [
+    "ignore::FutureWarning:mistral_common.*",
+]
 
 [tool.coverage.run]
-source = ["."]
+source = ["src"]
 omit = [
     "tests/*",
     "**/__pycache__/*",
@@ -120,9 +121,9 @@ exclude_lines = [
     "@abstractmethod",
 ]
 
-# ============================================================
-# BANDIT - Security linter
-# ============================================================
+# ==============================================================
+# BANDIT - Security linter (gardé pour compatibilité)
+# ==============================================================
 [tool.bandit]
 exclude_dirs = [
     "tests",
@@ -131,30 +132,16 @@ exclude_dirs = [
     "logs",
     "__pycache__",
 ]
-# Skip specific tests
-skips = [
-    "B101",  # assert_used (OK dans les tests)
-]
-# Tests à exécuter
-tests = [
-    "B201", "B301", "B302", "B303", "B304", "B305", "B306",
-    "B308", "B310", "B311", "B312", "B313", "B314", "B315",
-    "B316", "B317", "B318", "B319", "B320", "B401", "B402",
-    "B403", "B404", "B405", "B406", "B407", "B408", "B409",
-    "B410", "B411", "B412", "B413", "B501", "B502", "B503",
-    "B504", "B505", "B506", "B507", "B601", "B602", "B603",
-    "B604", "B605", "B606", "B607", "B608", "B609", "B610",
-    "B611", "B701", "B702", "B703"
-]
+skips = ["B101"]
 
-# ============================================================
-# MYPY - Static type checker (optionnel)
-# ============================================================
+# ==============================================================
+# MYPY - Static type checker
+# ==============================================================
 [tool.mypy]
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false  # Mettre à true pour strict typing
+disallow_untyped_defs = false
 ignore_missing_imports = true
 exclude = [
     "venv",
@@ -163,32 +150,12 @@ exclude = [
     "logs",
 ]
 
-# ============================================================
-# FLAKE8 - Linter (configuration alternative, pas dans pyproject.toml nativement)
-# ============================================================
-# Note: Flake8 ne supporte pas pyproject.toml nativement
-# Utilise setup.cfg ou .flake8 à la place
-# Ou installer flake8-pyproject
-
-# ============================================================
-# RUFF - Alternative moderne à Flake8 (optionnel)
-# ============================================================
+# ==============================================================
+# RUFF - Linter moderne (remplace Flake8)
+# ==============================================================
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-select = [
-    "E",    # pycodestyle errors
-    "W",    # pycodestyle warnings
-    "F",    # pyflakes
-    "I",    # isort
-    "B",    # flake8-bugbear
-    "C4",   # flake8-comprehensions
-    "UP",   # pyupgrade
-]
-ignore = [
-    "E501",  # line too long (géré par Black)
-    "B008",  # function calls in argument defaults
-]
 exclude = [
     ".git",
     ".venv",
@@ -199,18 +166,36 @@ exclude = [
     "build",
 ]
 
-[tool.ruff.per-file-ignores]
-"__init__.py" = ["F401"]  # Unused imports OK in __init__
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "S",      # flake8-bandit (sécurité)
+]
+ignore = [
+    "E501",   # line too long (géré par formatter)
+    "B008",   # function calls in argument defaults
+    "UP007",  # Union[X, Y] -> X | Y (garde compatibilité)
+]
 
-# ============================================================
-# SEMANTIC-RELEASE (si package.json absent)
-# ============================================================
-# Note: Semantic Release utilise .releaserc.json
-# Cette section est juste pour référence
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["S101", "S105", "S106", "B017"]
+"main.py" = ["S104"]  # Binding to all interfaces needed for Docker
+"src/config.py" = ["S104", "S105"]  # Default values, overridden by env vars
 
-# ============================================================
-# COMMITIZEN (si tu utilises cz au lieu de commitify)
-# ============================================================
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ==============================================================
+# COMMITIZEN
+# ==============================================================
 [tool.commitizen]
 name = "cz_gitmoji"
 version = "1.0.0"

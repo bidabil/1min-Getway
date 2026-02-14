@@ -1,111 +1,130 @@
 # infrastructure/error_service.py
-import logging
+"""
+Service de gestion des erreurs pour la Gateway 1min.AI
+Format conforme à la documentation officielle : https://docs.1min.ai
+"""
 
-# Standardized logger for the error management layer
+import logging
+from typing import Any
+
 logger = logging.getLogger("1min-gateway.error-service")
 
 
-def get_error_response(code, model=None, key=None):
+def get_error_response(
+    code: int,
+    model: str | None = None,
+    key: str | None = None,
+) -> tuple[dict[str, Any], int]:
     """
-    Handles errors and returns them in the OpenAI-compatible structured JSON format.
-    Centralizing this logic keeps the main controller clean and ensures consistent responses.
+    Gère les erreurs et les retourne au format JSON structuré.
+
+    Format conforme à la documentation 1min.AI :
+    {
+        "success": false,
+        "error": {
+            "code": "ERROR_CODE",
+            "message": "Description de l'erreur"
+        }
+    }
     """
-    error_codes = {
+    error_codes: dict[int, dict[str, Any]] = {
+        # Erreurs de validation
         1002: {
-            "message": f"The model '{model}' does not exist.",
-            "type": "invalid_request_error",
-            "param": None,
-            "code": "model_not_found",
+            "code": "MODEL_NOT_FOUND",
+            "message": f"The model '{model}' does not exist or is not available.",
             "http_code": 404,
         },
-        1020: {
-            "message": "Incorrect API key provided. You can find your API key at https://app.1min.ai/api.",
-            "type": "authentication_error",
-            "param": None,
-            "code": "invalid_api_key",
-            "http_code": 401,
-        },
-        1021: {
-            "message": "Invalid Authentication provided.",
-            "type": "invalid_request_error",  # CORRECTION: changé de authentication_error
-            "param": None,
-            "code": "invalid_api_key",  # CORRECTION: ajouté le code
-            "http_code": 401,
-        },
-        1212: {
-            "message": "Incorrect Endpoint. Please use the /v1/chat/completions endpoint.",
-            "type": "invalid_request_error",
-            "param": None,
-            "code": "model_not_supported",
+        1044: {
+            "code": "MODEL_NOT_SUPPORTED",
+            "message": f"The model '{model}' does not support this type of input.",
             "http_code": 400,
         },
-        1044: {
-            "message": f"The model '{model}' does not support this type of input (e.g. image).",
-            "type": "invalid_request_error",
-            "param": None,
-            "code": "model_not_supported",
+        1212: {
+            "code": "INVALID_ENDPOINT",
+            "message": "Incorrect Endpoint. Please use the /v1/chat/completions endpoint.",
             "http_code": 400,
         },
         1412: {
+            "code": "INVALID_REQUEST",
             "message": "No messages provided in the request body.",
-            "type": "invalid_request_error",
-            "param": "messages",
-            "code": "invalid_request_error",
             "http_code": 400,
         },
         1423: {
+            "code": "INVALID_REQUEST",
             "message": "The last message provided has no content.",
-            "type": "invalid_request_error",
-            "param": "messages",
-            "code": "invalid_request_error",
             "http_code": 400,
         },
+        # Erreurs d'authentification (selon doc 1min.ai)
+        1020: {
+            "code": "UNAUTHORIZED",
+            "message": "Invalid or missing API key. Get your key at https://app.1min.ai/api",
+            "http_code": 401,
+        },
+        1021: {
+            "code": "UNAUTHORIZED",
+            "message": "Invalid or missing API key.",
+            "http_code": 401,
+        },
+        # Erreurs de permission (selon doc)
+        403: {
+            "code": "FORBIDDEN",
+            "message": "Insufficient permissions or quota exceeded.",
+            "http_code": 403,
+        },
+        # Erreurs de méthode
         1405: {
+            "code": "METHOD_NOT_ALLOWED",
             "message": "Method Not Allowed.",
-            "type": "invalid_request_error",
-            "param": None,
-            "code": "method_not_allowed",  # CORRECTION: ajouté le code
             "http_code": 405,
         },
+        # Erreurs de payload (selon doc Asset API)
         413: {
+            "code": "PAYLOAD_TOO_LARGE",
             "message": "File size exceeds maximum limit of 50MB.",
-            "type": "invalid_request_error",
-            "param": "file",
-            "code": "file_too_large",
             "http_code": 413,
         },
+        # Erreurs de validation entité (selon doc)
+        422: {
+            "code": "UNPROCESSABLE_ENTITY",
+            "message": "Invalid file IDs or unsupported model.",
+            "http_code": 422,
+        },
+        # Rate limit (selon doc : 180 req/min)
+        429: {
+            "code": "TOO_MANY_REQUESTS",
+            "message": "Rate limit exceeded (180 requests per minute).",
+            "http_code": 429,
+        },
+        # Erreurs serveur
         500: {
-            "message": "Internal Server Error. Please check the 1min-Gateway logs.",
-            "type": "api_error",
-            "param": None,
-            "code": "internal_error",
+            "code": "INTERNAL_ERROR",
+            "message": "Internal Server Error. Please check the gateway logs.",
             "http_code": 500,
         },
     }
 
-    # Fallback for undefined error codes
+    # Fallback pour codes non définis
     raw_error = error_codes.get(
         code,
         {
+            "code": "UNKNOWN_ERROR",
             "message": "An unknown error occurred.",
-            "type": "unknown_error",
-            "param": None,
-            "code": None,
             "http_code": 400,
         },
     )
 
-    http_status = raw_error.get("http_code", 400)
+    http_status: int = raw_error.get("http_code", 400)
 
-    # Prepare the payload for the client by removing internal fields (like http_code)
-    error_payload = {k: v for k, v in raw_error.items() if k != "http_code"}
+    # Format conforme à la doc 1min.ai
+    error_payload: dict[str, Any] = {
+        "code": raw_error["code"],
+        "message": raw_error["message"],
+    }
 
-    # Audit Log: Providing context for quick debugging
+    # Log d'audit
     logger.error(
         f"API_ERROR | Code: {code} | Status: {http_status} | "
         f"Msg: {error_payload['message']} | Model: {model}"
     )
 
-    # Retourne juste le payload et le status, pas jsonify
-    # jsonify() sera appelé dans main.py
     return error_payload, http_status

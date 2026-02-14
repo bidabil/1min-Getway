@@ -1,0 +1,836 @@
+# ==============================================================
+# CI Pipeline - 1min-Gateway
+# ==============================================================
+# Workflow réutilisable pour l'intégration continue
+# - Build, Test, Security scans
+# - Ne fait PAS de déploiement
+# ==============================================================
+
+name: CI
+
+on:
+  workflow_call:
+    inputs:
+      skip_tests:
+        description: "Skip tests (emergency only)"
+        type: boolean
+        default: false
+      upload_artifacts:
+        description: "Upload build artifacts"
+        type: boolean
+        default: true
+    outputs:
+      version:
+        description: "Version built"
+        value: ${{ jobs.init.outputs.version }}
+      sha_short:
+        description: "Short SHA"
+        value: ${{ jobs.init.outputs.sha_short }}
+      quality_passed:
+        description: "Quality gate passed"
+        value: ${{ jobs.quality-gate.outputs.passed }}
+  pull_request:
+    branches: ["main", "develop"]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: ["main", "develop"]
+    tags: ["v*"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "LICENSE"
+      - ".gitignore"
+  schedule:
+    - cron: "0 6 * * 1"  # Security scan every Monday 6 AM UTC
+    - cron: "0 0 1 * *"  # Monthly full scan
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY_DOCKERHUB: docker.io
+  REGISTRY_GHCR: ghcr.io
+  IMAGE_NAME: billelattafi/1min-gateway
+  GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
+  PYTHON_VERSION: "3.12"
+  RUFF_VERSION: "0.8.0"
+  MIN_COVERAGE: 75
+
+permissions:
+  contents: read
+
+jobs:
+  # ==============================================================
+  # STAGE 0: INITIALIZATION
+  # ==============================================================
+  init:
+    name: "🚀 Initialize"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha_short: ${{ steps.vars.outputs.sha_short }}
+      is_release: ${{ steps.vars.outputs.is_release }}
+      is_main: ${{ steps.vars.outputs.is_main }}
+      is_pr: ${{ steps.vars.outputs.is_pr }}
+      is_draft: ${{ steps.vars.outputs.is_draft }}
+      version: ${{ steps.vars.outputs.version }}
+      changes_src: ${{ steps.changes.outputs.src }}
+      changes_deps: ${{ steps.changes.outputs.deps }}
+      changes_docker: ${{ steps.changes.outputs.docker }}
+      changes_ci: ${{ steps.changes.outputs.ci }}
+      changes_tests: ${{ steps.changes.outputs.tests }}
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set variables
+        id: vars
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "is_release=${{ startsWith(github.ref, 'refs/tags/v') }}" >> $GITHUB_OUTPUT
+          echo "is_main=${{ github.ref == 'refs/heads/main' }}" >> $GITHUB_OUTPUT
+          echo "is_pr=${{ github.event_name == 'pull_request' }}" >> $GITHUB_OUTPUT
+          echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+
+          if [[ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=0.0.0-dev+${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            src:
+              - 'src/**'
+              - 'main.py'
+            deps:
+              - 'requirements*.txt'
+              - 'pyproject.toml'
+              - 'poetry.lock'
+            docker:
+              - 'Dockerfile'
+              - 'docker-compose*.yml'
+              - '.dockerignore'
+            ci:
+              - '.github/workflows/**'
+              - '.github/actions/**'
+            tests:
+              - 'tests/**'
+              - 'pytest.ini'
+              - 'conftest.py'
+
+      - name: Pipeline Info
+        run: |
+          echo "## 🚀 CI Pipeline Initialized" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Variable | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ steps.vars.outputs.sha_short }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Is Release | ${{ steps.vars.outputs.is_release }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Is Main | ${{ steps.vars.outputs.is_main }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Is PR | ${{ steps.vars.outputs.is_pr }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ steps.vars.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Changes Detected" >> $GITHUB_STEP_SUMMARY
+          echo "- Source: ${{ steps.changes.outputs.src }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Dependencies: ${{ steps.changes.outputs.deps }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker: ${{ steps.changes.outputs.docker }}" >> $GITHUB_STEP_SUMMARY
+          echo "- CI: ${{ steps.changes.outputs.ci }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests: ${{ steps.changes.outputs.tests }}" >> $GITHUB_STEP_SUMMARY
+
+  # ==============================================================
+  # STAGE 1: CODE QUALITY (Parallel)
+  # ==============================================================
+  lint:
+    name: "🔍 Lint"
+    needs: init
+    if: |
+      needs.init.outputs.is_draft != 'true' &&
+      (needs.init.outputs.changes_src == 'true' || needs.init.outputs.changes_ci == 'true' || github.event_name == 'schedule')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache Ruff
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ruff-${{ env.RUFF_VERSION }}
+
+      - name: Install Ruff
+        run: pip install ruff==${{ env.RUFF_VERSION }}
+
+      - name: Ruff Lint
+        run: ruff check . --output-format=github
+
+      - name: Ruff Format
+        run: ruff format --check --diff .
+
+  type-check:
+    name: "🔬 Type Check"
+    needs: init
+    if: |
+      needs.init.outputs.is_draft != 'true' &&
+      (needs.init.outputs.changes_src == 'true' || needs.init.outputs.changes_deps == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install mypy types-requests types-cachetools
+
+      - name: Run MyPy (Strict)
+        run: mypy src/ --ignore-missing-imports --strict --pretty
+
+  # ==============================================================
+  # STAGE 2: TESTING (Matrix)
+  # ==============================================================
+  test:
+    name: "🧪 Test (Python ${{ matrix.python-version }} / ${{ matrix.os }})"
+    needs: init
+    if: |
+      needs.init.outputs.is_draft != 'true' &&
+      !inputs.skip_tests &&
+      (needs.init.outputs.changes_src == 'true' || needs.init.outputs.changes_deps == 'true' || needs.init.outputs.changes_tests == 'true' || github.event_name == 'schedule')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+        include:
+          - python-version: "3.12"
+            os: ubuntu-latest
+            coverage: true
+            benchmark: true
+          - python-version: "3.12"
+            os: windows-latest
+            coverage: false
+            benchmark: false
+    env:
+      ONE_MIN_AI_API_KEY: "test-api-key-ci"  # pragma: allowlist secret
+      SECRET_KEY: "test-secret-key-ci-only"  # pragma: allowlist secret
+      APP_ENV: "testing"
+      DEBUG: "True"
+      RATELIMIT_ENABLED: "False"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-xdist pytest-timeout pytest-benchmark pytest-randomly
+
+      - name: Run Tests with Coverage
+        if: matrix.coverage
+        run: |
+          pytest tests/ -v \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:htmlcov \
+            --cov-fail-under=${{ env.MIN_COVERAGE }} \
+            --junitxml=test-results.xml \
+            --timeout=60 \
+            -n auto \
+            --randomly-seed=12345
+
+      - name: Run Tests (no coverage)
+        if: ${{ !matrix.coverage }}
+        shell: bash
+        run: |
+          pytest tests/ -v \
+            --junitxml=test-results.xml \
+            --timeout=60 \
+            -n auto
+
+      - name: Run Benchmarks
+        if: matrix.benchmark && github.event_name == 'pull_request'
+        run: |
+          pytest tests/ -v \
+            --benchmark-only \
+            --benchmark-json=benchmark.json \
+            --benchmark-compare || true
+        continue-on-error: true
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always() && inputs.upload_artifacts == true
+        with:
+          name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            test-results.xml
+            coverage.xml
+            htmlcov/
+            benchmark.json
+          retention-days: 7
+
+      - name: Upload Coverage to Codecov
+        if: matrix.coverage && always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: python-${{ matrix.python-version }}
+
+      - name: Test Summary
+        if: always() && matrix.os == 'ubuntu-latest'
+        uses: test-summary/action@v2
+        with:
+          paths: test-results.xml
+
+  # ==============================================================
+  # STAGE 3: SECURITY (Parallel)
+  # ==============================================================
+  security-sast:
+    name: "🔒 SAST Scan"
+    needs: init
+    if: |
+      needs.init.outputs.is_draft != 'true' &&
+      (needs.init.outputs.changes_src == 'true' || github.event_name == 'schedule')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Ruff Security Rules
+        run: |
+          pip install ruff==${{ env.RUFF_VERSION }}
+          ruff check . --select S --output-format=github
+
+      - name: Semgrep Scan
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/python
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+
+      - name: CodeQL Initialize
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-and-quality
+
+      - name: CodeQL Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+
+  osv-scan:
+    name: "🔒 OSV Scanner"
+    needs: init
+    if: |
+      needs.init.outputs.is_draft != 'true' &&
+      (needs.init.outputs.changes_deps == 'true' || github.event_name == 'schedule')
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.3
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    with:
+      scan-args: |-
+        --recursive
+        ./
+
+  security-deps:
+    name: "🔒 Dependency Scan"
+    needs: init
+    if: |
+      needs.init.outputs.is_draft != 'true' &&
+      (needs.init.outputs.changes_deps == 'true' || github.event_name == 'schedule')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pip-audit safety
+
+      - name: Pip Audit
+        run: |
+          pip-audit --format=json --output=pip-audit.json || true
+          pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Safety Check
+        run: safety check --json --output=safety.json || true
+        continue-on-error: true
+
+      - name: Upload Security Results
+        uses: actions/upload-artifact@v4
+        if: always() && inputs.upload_artifacts == true
+        with:
+          name: dependency-scan-results
+          path: |
+            pip-audit.json
+            safety.json
+          retention-days: 30
+
+  dependency-review:
+    name: "📦 Dependency Review"
+    needs: init
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-3.0, AGPL-3.0
+          comment-summary-in-pr: always
+
+  # ==============================================================
+  # STAGE 4: QUALITY GATE
+  # ==============================================================
+  quality-gate:
+    name: "✅ Quality Gate"
+    needs: [init, lint, type-check, test, security-sast, security-deps, osv-scan]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      passed: ${{ steps.evaluate.outputs.passed }}
+    steps:
+      - name: Evaluate Quality Gate
+        id: evaluate
+        run: |
+          echo "## Quality Gate Evaluation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          PASSED=true
+
+          # Lint is required
+          if [[ "${{ needs.lint.result }}" == "failure" ]]; then
+            echo "❌ Lint: FAILED" >> $GITHUB_STEP_SUMMARY
+            PASSED=false
+          elif [[ "${{ needs.lint.result }}" == "success" ]]; then
+            echo "✅ Lint: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Lint: SKIPPED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Type-check is now required (strict mode)
+          if [[ "${{ needs.type-check.result }}" == "failure" ]]; then
+            echo "❌ Type Check: FAILED" >> $GITHUB_STEP_SUMMARY
+            PASSED=false
+          elif [[ "${{ needs.type-check.result }}" == "success" ]]; then
+            echo "✅ Type Check: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Type Check: SKIPPED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Tests are required (unless skipped via input)
+          if [[ "${{ needs.test.result }}" == "failure" ]]; then
+            echo "❌ Tests: FAILED" >> $GITHUB_STEP_SUMMARY
+            PASSED=false
+          elif [[ "${{ needs.test.result }}" == "success" ]]; then
+            echo "✅ Tests: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Tests: SKIPPED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Security SAST (advisory - logged but doesn't block)
+          if [[ "${{ needs.security-sast.result }}" == "failure" ]]; then
+            echo "⚠️ SAST: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.security-sast.result }}" == "success" ]]; then
+            echo "✅ SAST: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ SAST: SKIPPED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Security Deps (advisory - logged but doesn't block)
+          if [[ "${{ needs.security-deps.result }}" == "failure" ]]; then
+            echo "⚠️ Dependency Scan: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.security-deps.result }}" == "success" ]]; then
+            echo "✅ Dependency Scan: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ Dependency Scan: SKIPPED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # OSV Scanner (advisory - logged but doesn't block)
+          if [[ "${{ needs.osv-scan.result }}" == "failure" ]]; then
+            echo "⚠️ OSV Scanner: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.osv-scan.result }}" == "success" ]]; then
+            echo "✅ OSV Scanner: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ OSV Scanner: SKIPPED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "$PASSED" == "true" ]]; then
+            echo "### ✅ Quality Gate: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Quality Gate: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+
+      - name: Fail if not passed
+        if: steps.evaluate.outputs.passed != 'true'
+        run: exit 1
+
+  # ==============================================================
+  # STAGE 5: BUILD & PUSH (sans déploiement)
+  # ==============================================================
+  build-and-push:
+    name: "📦 Build & Push"
+    needs: [init, quality-gate]
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.quality-gate.outputs.passed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      security-events: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image_tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Login seulement si on va push (pas en PR)
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_DOCKERHUB }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}
+            ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}},value=${{ needs.init.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.init.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
+            type=semver,pattern={{major}},value=${{ needs.init.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
+            type=sha,prefix=,format=short
+            type=ref,event=pr
+          labels: |
+            org.opencontainers.image.title=1min-Gateway
+            org.opencontainers.image.description=Intelligent API Gateway for AI models
+            org.opencontainers.image.vendor=Billel Attafi
+            org.opencontainers.image.version=${{ needs.init.outputs.version }}
+
+      - name: Build for scan
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:scan
+          cache-from: type=gha
+          build-args: |
+            VERSION=${{ needs.init.outputs.version }}
+            COMMIT=${{ needs.init.outputs.sha_short }}
+
+      - name: Trivy Scan
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan
+          format: "sarif"
+          output: "trivy.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"  # Ne pas bloquer en PR
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy.sarif"
+
+      - name: Grype Scan
+        uses: anchore/scan-action@v6
+        if: always()
+        with:
+          image: ${{ env.IMAGE_NAME }}:scan
+          fail-build: false
+          output-format: sarif
+          severity-cutoff: high
+
+      # Build et Push (push seulement si PAS en PR)
+      - name: Build and Push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            VERSION=${{ needs.init.outputs.version }}
+            COMMIT=${{ needs.init.outputs.sha_short }}
+
+      # Les étapes suivantes seulement si on a push (pas en PR)
+      - name: Generate SBOM Attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-sbom@v2
+        with:
+          subject-name: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: "sbom.spdx.json"
+          push-to-registry: true
+        continue-on-error: true
+
+      - name: Generate Build Attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3.8.0
+
+      - name: Sign Images (Keyless)
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes "${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}@${DIGEST}"
+          cosign sign --yes "${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${DIGEST}"
+
+      - name: Verify Signature
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-identity-regexp="https://github.com/${{ github.repository }}/*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            "${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${DIGEST}"
+
+      - name: Build Summary
+        run: |
+          echo "## 📦 Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Event | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Push | ${{ github.event_name != 'pull_request' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ needs.init.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Digest | \`${{ steps.build.outputs.digest || 'N/A' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Platforms | linux/amd64, linux/arm64 |" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Security" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Trivy scanned" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Grype scanned" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ SBOM generated" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Cosign signed (keyless)" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Provenance attestation" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### PR Build (no push)" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Build validated" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Trivy scanned" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Grype scanned" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==============================================================
+  # STAGE 6: NOTIFICATION
+  # ==============================================================
+  notify:
+    name: "📢 Notify"
+    needs: [init, lint, type-check, test, security-sast, security-deps, osv-scan, quality-gate, build-and-push]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Determine Status
+        id: status
+        run: |
+          if [[ "${{ needs.build-and-push.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=Build successful" >> $GITHUB_OUTPUT
+            echo "color=#36a64f" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.quality-gate.result }}" == "failure" ]]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=Quality gate failed" >> $GITHUB_OUTPUT
+            echo "color=#dc3545" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.init.outputs.is_pr }}" == "true" ]]; then
+            if [[ "${{ needs.quality-gate.outputs.passed }}" == "true" ]]; then
+              echo "status=success" >> $GITHUB_OUTPUT
+              echo "message=PR checks passed" >> $GITHUB_OUTPUT
+              echo "color=#36a64f" >> $GITHUB_OUTPUT
+            else
+              echo "status=failure" >> $GITHUB_OUTPUT
+              echo "message=PR checks failed" >> $GITHUB_OUTPUT
+              echo "color=#dc3545" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "status=unknown" >> $GITHUB_OUTPUT
+            echo "message=Pipeline completed" >> $GITHUB_OUTPUT
+            echo "color=#6c757d" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pipeline Report
+        run: |
+          echo "## 📊 CI Pipeline Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Init | Initialize | ${{ needs.init.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality | Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality | Type Check | ${{ needs.type-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality | Test | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | SAST | ${{ needs.security-sast.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | Dependencies | ${{ needs.security-deps.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | OSV Scanner | ${{ needs.osv-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gate | Quality Gate | ${{ needs.quality-gate.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | Build & Push | ${{ needs.build-and-push.result }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ==============================================================
+  # SCHEDULED: OPENSSF SCORECARD
+  # ==============================================================
+  scorecard:
+    name: "🏆 OpenSSF Scorecard"
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: scorecard.json
+          results_format: json
+          publish_results: true
+
+      - name: Upload Scorecard Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorecard-results
+          path: scorecard.json
+          retention-days: 30
+
+      - name: Scorecard Summary
+        run: |
+          echo "## 🏆 OpenSSF Scorecard" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Scorecard analysis completed. Results uploaded as artifact." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed results at: https://securityscorecards.dev/viewer/?uri=github.com/${{ github.repository }}" >> $GITHUB_STEP_SUMMARY

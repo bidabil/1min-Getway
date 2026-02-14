@@ -1,148 +1,140 @@
-# src/config.py
+# config.py
 
-"""Configuration centralisée, typée et validée pour la Gateway 1min.ai."""
+"""
+Configuration centralisée pour la Gateway 1min.AI
+Alignée sur la documentation officielle : https://docs.1min.ai
+"""
 
 import logging
 import os
-import re
-from typing import Final, List, Set
+from typing import Final
 
 from dotenv import load_dotenv
 
-# Initialisation du logging
+# Import en haut du fichier (E402 fix)
+from .domain.models import AVAILABLE_MODELS as ALL_MODELS
+
 logger = logging.getLogger("1min-gateway.config")
 load_dotenv()
 
 
-class Defaults:
-    """Valeurs par défaut et constantes de référence."""
+# ============================================================================
+# AUTHENTIFICATION
+# ============================================================================
+ONE_MIN_AI_API_KEY: Final[str] = os.getenv("ONE_MIN_AI_API_KEY", "")
 
-    PORT: Final[int] = 5001
-    HOST: Final[str] = "0.0.0.0"
-    LOG_LEVEL: Final[str] = "INFO"
-    APP_ENV: Final[str] = "production"
-    BASE_URL: Final[str] = "https://api.1min.ai"
+# ============================================================================
+# ENDPOINTS API (selon documentation officielle)
+# ============================================================================
+ONE_MIN_BASE_URL: Final[str] = os.getenv("ONE_MIN_BASE_URL", "https://api.1min.ai")
 
-    # Modèles par défaut si la config est erronée
-    MODELS: Final[List[str]] = ["gpt-4o-mini", "open-mistral-nemo"]
-
-    # Référence complète des modèles supportés (évite les imports circulaires)
-    SUPPORTED_MODELS: Final[List[str]] = [
-        "gpt-4o-mini",
-        "gpt-4o",
-        "claude-3-haiku",
-        "claude-3-5-sonnet",
-        "gemini-1.5-flash",
-        "open-mistral-nemo",
-        "deepseek-chat",
-    ]
-
-    TRUTHY_VALUES: Final[Set[str]] = {"true", "1", "yes", "on", "enabled"}
-    LOG_LEVELS: Final[Set[str]] = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-
-
-# --- UTILITAIRES DE VALIDATION TYPÉS ---
-
-
-def get_bool(key: str, default: str = "false") -> bool:
-    """Convertit une variable d'environnement en booléen."""
-    return os.getenv(key, default).lower() in Defaults.TRUTHY_VALUES
-
-
-def get_validated_port() -> int:
-    """Récupère et valide le port réseau (1-65535)."""
-    port_str = os.getenv("PORT", str(Defaults.PORT))
-    try:
-        port = int(port_str)
-        if 1 <= port <= 65535:
-            return port
-        logger.warning("Port %d hors limites. Utilisation du défaut: %d", port, Defaults.PORT)
-    except ValueError:
-        logger.warning("Port invalide '%s'. Utilisation du défaut: %d", port_str, Defaults.PORT)
-    return Defaults.PORT
-
-
-def validate_url(url: str, name: str) -> str:
-    """Valide le format d'une URL via Regex."""
-    pattern = r"^https?://[a-zA-Z0-9.-]+(?::\d+)?"
-    if not re.match(pattern, url):
-        logger.warning("URL %s malformée: %s. Utilisation du défaut.", name, url)
-        return Defaults.BASE_URL
-    return url
-
-
-# --- CHARGEMENT DE LA CONFIGURATION ---
-
-APP_ENV: Final[str] = os.getenv("APP_ENV", Defaults.APP_ENV)
-DEBUG: Final[bool] = get_bool("DEBUG", "false")
-APP_HOST: Final[str] = os.getenv("HOST", Defaults.HOST)
-APP_PORT: Final[int] = get_validated_port()
-
-# Validation des URLs
-ONE_MIN_BASE_URL: Final[str] = validate_url(
-    os.getenv("ONE_MIN_BASE_URL", Defaults.BASE_URL), "BASE_URL"
-)
+# Endpoints dérivés (automatiquement générés)
 ONE_MIN_FEATURE_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/features"
 ONE_MIN_CONVERSATION_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/conversations"
 ONE_MIN_ASSET_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/assets"
 
-# --- VARIABLES D'ENVIRONNEMENT POUR LES MODÈLES ---
+# ============================================================================
+# CONFIGURATION SERVEUR
+# ============================================================================
+APP_ENV: Final[str] = os.getenv("APP_ENV", "production")
+DEBUG: Final[bool] = os.getenv("DEBUG", "False").lower() == "true"
+APP_HOST: Final[str] = os.getenv("HOST", "0.0.0.0")
+APP_PORT: Final[int] = int(os.getenv("PORT", "5001"))
 
-PERMIT_MODELS_FROM_SUBSET_ONLY: Final[bool] = get_bool("PERMIT_MODELS_FROM_SUBSET_ONLY", "false")
+# ============================================================================
+# MEMCACHED
+# ============================================================================
+MEMCACHED_HOST: Final[str] = os.getenv("MEMCACHED_HOST", "memcached")
+MEMCACHED_PORT: Final[int] = int(os.getenv("MEMCACHED_PORT", "11211"))
 
-SUBSET_OF_ONE_MIN_PERMITTED_MODELS: Final[List[str]] = [
+# ============================================================================
+# MODÈLES DISPONIBLES
+# ============================================================================
+PERMIT_MODELS_FROM_SUBSET_ONLY: Final[bool] = (
+    os.getenv("PERMIT_MODELS_FROM_SUBSET_ONLY", "False").lower() == "true"
+)
+
+SUBSET_OF_ONE_MIN_PERMITTED_MODELS: Final[list[str]] = [
     m.strip() for m in os.getenv("SUBSET_OF_ONE_MIN_PERMITTED_MODELS", "").split(",") if m.strip()
 ]
 
-# --- LOGIQUE DES MODÈLES ---
+# Détermination des modèles actifs
+AVAILABLE_MODELS: Final[list[str]] = (
+    SUBSET_OF_ONE_MIN_PERMITTED_MODELS
+    if PERMIT_MODELS_FROM_SUBSET_ONLY and SUBSET_OF_ONE_MIN_PERMITTED_MODELS
+    else ALL_MODELS
+)
+
+# ============================================================================
+# RATE LIMITING (selon documentation : 180 req/min par défaut)
+# ============================================================================
+RATELIMIT_ENABLED: Final[bool] = os.getenv("RATELIMIT_ENABLED", "True").lower() == "true"
+RATELIMIT_STORAGE_URL: Final[str] = os.getenv(
+    "RATELIMIT_STORAGE_URL", f"memcache://{MEMCACHED_HOST}:{MEMCACHED_PORT}"
+)
+RATELIMIT_DEFAULT: Final[str] = os.getenv("RATELIMIT_DEFAULT", "180 per minute")
+RATELIMIT_MODELS_LIST: Final[str] = os.getenv("RATELIMIT_MODELS_LIST", "180 per minute")
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+LOG_LEVEL: Final[str] = os.getenv("LOG_LEVEL", "INFO").upper()
+LOG_FILE: Final[str] = os.getenv("LOG_FILE", "/app/logs/gateway.log")
+
+# ============================================================================
+# SÉCURITÉ
+# ============================================================================
+SECRET_KEY: Final[str] = os.getenv("SECRET_KEY", "CHANGE_ME_IN_PRODUCTION")
+CORS_ORIGINS: Final[str] = os.getenv("CORS_ORIGINS", "*")
 
 
-def load_available_models() -> List[str]:
-    """Détermine les modèles disponibles avec validation de cohérence."""
-    is_restricted = get_bool("PERMIT_MODELS_FROM_SUBSET_ONLY", "false")
-    if not is_restricted:
-        return Defaults.SUPPORTED_MODELS
+# ============================================================================
+# VALIDATION DE LA CONFIGURATION
+# ============================================================================
+def validate_config() -> None:
+    """Valide la configuration au démarrage"""
+    errors: list[str] = []
 
-    raw_list = os.getenv("SUBSET_OF_ONE_MIN_PERMITTED_MODELS", "")
-    subset = [m.strip() for m in raw_list.split(",") if m.strip()]
-    valid_subset = [m for m in subset if m in Defaults.SUPPORTED_MODELS]
+    # Vérification de la clé API
+    if not ONE_MIN_AI_API_KEY:
+        errors.append("❌ ONE_MIN_AI_API_KEY manquante dans .env")
 
-    return valid_subset if valid_subset else Defaults.MODELS
+    # Vérification de la sécurité en production
+    if APP_ENV == "production":
+        if SECRET_KEY == "CHANGE_ME_IN_PRODUCTION":
+            errors.append("❌ SECRET_KEY doit être changée en production")
+        if DEBUG:
+            logger.warning("⚠️ DEBUG=True en production - Non recommandé")
 
-
-AVAILABLE_MODELS: Final[List[str]] = load_available_models()
-
-# --- VALIDATION FINALE DE COHÉRENCE ---
-
-
-def check_config_safety() -> None:
-    """Vérifie les configurations potentiellement dangereuses."""
-    if DEBUG and APP_ENV == "production":
-        logger.warning("⚠️ SÉCURITÉ | DEBUG=True détecté en production !")
+    # Vérification des modèles
     if not AVAILABLE_MODELS:
-        logger.error("❌ CONFIG | Aucun modèle disponible pour la Gateway.")
-        raise ValueError("Configuration des modèles vide.")
+        errors.append("❌ Aucun modèle disponible - Vérifiez SUBSET_OF_ONE_MIN_PERMITTED_MODELS")
+
+    if errors:
+        for error in errors:
+            logger.error(error)
+        raise ValueError("Configuration invalide - Voir les erreurs ci-dessus")
+
+    logger.info("✅ Configuration validée avec succès")
 
 
-check_config_safety()
+def print_config_summary() -> None:
+    """Affiche un résumé de la configuration au démarrage"""
+    mode = "SUBSET" if PERMIT_MODELS_FROM_SUBSET_ONLY else "TOUS"
 
-# --- RÉSUMÉ ---
-
-
-def print_summary() -> None:
-    """Affiche un résumé propre au démarrage."""
-    summary = {
-        "ENV": APP_ENV,
-        "PORT": APP_PORT,
-        "DEBUG": DEBUG,
-        "MODELS": len(AVAILABLE_MODELS),
-        "LOG": os.getenv("LOG_LEVEL", Defaults.LOG_LEVEL).upper(),
-    }
-    logger.info("=" * 40)
-    logger.info("🚀 GATEWAY CONFIG LOADED")
-    for key, val in summary.items():
-        logger.info("%-10s: %s", key, val)
-    logger.info("=" * 40)
+    logger.info("=" * 60)
+    logger.info("🚀 1MIN-GATEWAY - CONFIGURATION")
+    logger.info("=" * 60)
+    logger.info(f"Environnement      : {APP_ENV}")
+    logger.info(f"Debug              : {DEBUG}")
+    logger.info(f"Host:Port          : {APP_HOST}:{APP_PORT}")
+    logger.info(f"API Endpoint       : {ONE_MIN_BASE_URL}")
+    logger.info(f"Modèles disponibles: {len(AVAILABLE_MODELS)} ({mode})")
+    logger.info(f"Rate Limit         : {RATELIMIT_DEFAULT}")
+    logger.info(f"Log Level          : {LOG_LEVEL}")
+    logger.info("=" * 60)
 
 
-print_summary()
+# Exécution des validations au chargement du module
+validate_config()
+print_config_summary()

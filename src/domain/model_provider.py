@@ -1,16 +1,21 @@
 # domain/model_provider.py
 import logging
+from typing import Any
 
 # Standardized logger for the model management layer
 logger = logging.getLogger("1min-gateway.model-provider")
 
 
-def get_formatted_models_list(all_models, permit_subset_only, subset_models):
+def get_formatted_models_list(
+    all_models: list[str],
+    permit_subset_only: bool,
+    subset_models: list[str] | None,
+) -> list[dict[str, Any]]:
     """
     Constructs the list of available models in OpenAI-compatible format.
     Handles filtering logic based on environment configuration (Full vs. Subset).
     """
-    # Determine the source of truth based on user restrictions
+    # Determine the source of truth based on user restrictions-
     source_list = subset_models if permit_subset_only else all_models
 
     # Safety Check: Warn if the configuration results in an empty list
@@ -22,13 +27,15 @@ def get_formatted_models_list(all_models, permit_subset_only, subset_models):
 
     # Audit log to monitor which visibility mode is currently active
     mode = "RESTRICTED_SUBSET" if permit_subset_only else "FULL_CATALOG"
-    logger.info(f"Model list requested. Mode: {mode}. Returning {len(source_list)} models.")
+    logger.info(
+        f"Model list requested. Mode: {mode}. Returning {len(source_list) if source_list else 0} models."
+    )
 
     # Building the OpenAI structure for each model
     # Note: 'created' timestamp is a placeholder for standard compatibility
-    models_data = [
+    models_data: list[dict[str, Any]] = [
         {"id": model_name, "object": "model", "owned_by": "1min-gateway", "created": 1727389042}
-        for model_name in source_list
+        for model_name in (source_list or [])
     ]
 
     return models_data

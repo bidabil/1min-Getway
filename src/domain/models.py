@@ -19,7 +19,6 @@ AVAILABLE_MODELS = [
     "claude-opus-4-20250514",
     "claude-opus-4-1-20250805",
     "claude-haiku-4-5-20251001",
-    "claude-3-5-haiku-20241022",
     # Cohere Models
     "command-r-08-2024",
     # DeepSeek Models
@@ -62,7 +61,6 @@ AVAILABLE_MODELS = [
     "o3",
     # Perplexity Models
     "sonar-reasoning-pro",
-    "sonar-reasoning",
     "sonar-pro",
     "sonar-deep-research",
     "sonar",
