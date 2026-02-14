@@ -357,7 +357,7 @@ jobs:
           ruff check . --select S --output-format=github
 
       - name: Semgrep Scan
-        uses: semgrep/semgrep-action@v2
+        uses: semgrep/semgrep-action@v1
         with:
           config: >-
             p/python
