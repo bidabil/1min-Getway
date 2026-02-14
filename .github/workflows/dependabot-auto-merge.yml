@@ -63,14 +63,14 @@ jobs:
         uses: actions/checkout@v4
 
       # ============================================================
-      # FIX CRITIQUE: Attendre le job "test" au lieu de "build-and-push"
+      # FIX CRITIQUE: Attendre le Quality Gate qui agrège tous les résultats
       # ============================================================
-      - name: Wait for Test CI checks
+      - name: Wait for Quality Gate
         uses: fountainhead/action-wait-for-check@v1.2.0
         id: wait-for-tests
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "test"  # ✅ CORRIGÉ: "test" existe toujours sur les PRs
+          checkName: "✅ Quality Gate"  # ✅ CORRIGÉ: Attend le portail qualité global
           ref: ${{ github.event.pull_request.head.sha }}
           timeoutSeconds: 1800  # 30 minutes max
 
