@@ -59,7 +59,7 @@ services:
   # MEMCACHED - Cache en mémoire pour rate limiting
   # ============================================================
   memcached:
-    image: memcached:1.6-alpine  # ✅ Version pinnée
+    image: memcached:1.6-alpine  # Version pinnée
     container_name: 1min-gateway-cache
 
     # Commande avec options optimisées

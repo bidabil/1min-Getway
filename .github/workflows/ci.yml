@@ -66,7 +66,7 @@ jobs:
   # STAGE 0: INITIALIZATION
   # ==============================================================
   init:
-    name: "🚀 Initialize"
+    name: "Initialize"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -131,7 +131,7 @@ jobs:
 
       - name: Pipeline Info
         run: |
-          echo "## 🚀 CI Pipeline Initialized" >> $GITHUB_STEP_SUMMARY
+          echo "## CI Pipeline Initialized" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Variable | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -152,7 +152,7 @@ jobs:
   # STAGE 1: CODE QUALITY (Parallel)
   # ==============================================================
   lint:
-    name: "🔍 Lint"
+    name: "Lint"
     needs: init
     if: |
       needs.init.outputs.is_draft != 'true' &&
@@ -187,7 +187,7 @@ jobs:
         run: ruff format --check --diff .
 
   type-check:
-    name: "🔬 Type Check"
+    name: "Type Check"
     needs: init
     if: |
       needs.init.outputs.is_draft != 'true' &&
@@ -218,7 +218,7 @@ jobs:
   # STAGE 2: TESTING (Matrix)
   # ==============================================================
   test:
-    name: "🧪 Test (Python ${{ matrix.python-version }} / ${{ matrix.os }})"
+    name: "Test (Python ${{ matrix.python-version }} / ${{ matrix.os }})"
     needs: init
     if: |
       needs.init.outputs.is_draft != 'true' &&
@@ -332,7 +332,7 @@ jobs:
   # STAGE 3: SECURITY (Parallel)
   # ==============================================================
   security-sast:
-    name: "🔒 SAST Scan"
+    name: "SAST Scan"
     needs: init
     if: |
       needs.init.outputs.is_draft != 'true' &&
@@ -377,7 +377,7 @@ jobs:
           category: "/language:python"
 
   osv-scan:
-    name: "🔒 OSV Scanner"
+    name: "OSV Scanner"
     needs: init
     if: |
       needs.init.outputs.is_draft != 'true' &&
@@ -393,7 +393,7 @@ jobs:
         ./
 
   security-deps:
-    name: "🔒 Dependency Scan"
+    name: "Dependency Scan"
     needs: init
     if: |
       needs.init.outputs.is_draft != 'true' &&
@@ -438,7 +438,7 @@ jobs:
           retention-days: 30
 
   dependency-review:
-    name: "📦 Dependency Review"
+    name: "Dependency Review"
     needs: init
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -461,7 +461,7 @@ jobs:
   # STAGE 4: QUALITY GATE
   # ==============================================================
   quality-gate:
-    name: "✅ Quality Gate"
+    name: "Quality Gate"
     needs: [init, lint, type-check, test, security-sast, security-deps, osv-scan]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
@@ -479,66 +479,66 @@ jobs:
 
           # Lint is required
           if [[ "${{ needs.lint.result }}" == "failure" ]]; then
-            echo "❌ Lint: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Lint: FAILED" >> $GITHUB_STEP_SUMMARY
             PASSED=false
           elif [[ "${{ needs.lint.result }}" == "success" ]]; then
-            echo "✅ Lint: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "Lint: PASSED" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⏭️ Lint: SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "Lint: SKIPPED" >> $GITHUB_STEP_SUMMARY
           fi
 
           # Type-check is now required (strict mode)
           if [[ "${{ needs.type-check.result }}" == "failure" ]]; then
-            echo "❌ Type Check: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Type Check: FAILED" >> $GITHUB_STEP_SUMMARY
             PASSED=false
           elif [[ "${{ needs.type-check.result }}" == "success" ]]; then
-            echo "✅ Type Check: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "Type Check: PASSED" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⏭️ Type Check: SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "Type Check: SKIPPED" >> $GITHUB_STEP_SUMMARY
           fi
 
           # Tests are required (unless skipped via input)
           if [[ "${{ needs.test.result }}" == "failure" ]]; then
-            echo "❌ Tests: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Tests: FAILED" >> $GITHUB_STEP_SUMMARY
             PASSED=false
           elif [[ "${{ needs.test.result }}" == "success" ]]; then
-            echo "✅ Tests: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "Tests: PASSED" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⏭️ Tests: SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "Tests: SKIPPED" >> $GITHUB_STEP_SUMMARY
           fi
 
           # Security SAST (advisory - logged but doesn't block)
           if [[ "${{ needs.security-sast.result }}" == "failure" ]]; then
-            echo "⚠️ SAST: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
+            echo "SAST: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ needs.security-sast.result }}" == "success" ]]; then
-            echo "✅ SAST: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "SAST: PASSED" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⏭️ SAST: SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "SAST: SKIPPED" >> $GITHUB_STEP_SUMMARY
           fi
 
           # Security Deps (advisory - logged but doesn't block)
           if [[ "${{ needs.security-deps.result }}" == "failure" ]]; then
-            echo "⚠️ Dependency Scan: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
+            echo "Dependency Scan: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ needs.security-deps.result }}" == "success" ]]; then
-            echo "✅ Dependency Scan: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "Dependency Scan: PASSED" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⏭️ Dependency Scan: SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "Dependency Scan: SKIPPED" >> $GITHUB_STEP_SUMMARY
           fi
 
           # OSV Scanner (advisory - logged but doesn't block)
           if [[ "${{ needs.osv-scan.result }}" == "failure" ]]; then
-            echo "⚠️ OSV Scanner: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
+            echo "OSV Scanner: FAILED (advisory)" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ needs.osv-scan.result }}" == "success" ]]; then
-            echo "✅ OSV Scanner: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "OSV Scanner: PASSED" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⏭️ OSV Scanner: SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "OSV Scanner: SKIPPED" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
           if [[ "$PASSED" == "true" ]]; then
-            echo "### ✅ Quality Gate: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "### Quality Gate: PASSED" >> $GITHUB_STEP_SUMMARY
           else
-            echo "### ❌ Quality Gate: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "### Quality Gate: FAILED" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "passed=$PASSED" >> $GITHUB_OUTPUT
@@ -551,7 +551,7 @@ jobs:
   # STAGE 5: BUILD & PUSH (sans déploiement)
   # ==============================================================
   build-and-push:
-    name: "📦 Build & Push"
+    name: "Build & Push"
     needs: [init, quality-gate]
     if: |
       always() &&
@@ -711,7 +711,7 @@ jobs:
 
       - name: Build Summary
         run: |
-          echo "## 📦 Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## Build Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -723,24 +723,24 @@ jobs:
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Security" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Trivy scanned" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Grype scanned" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ SBOM generated" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Cosign signed (keyless)" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Provenance attestation" >> $GITHUB_STEP_SUMMARY
+            echo "- Trivy scanned" >> $GITHUB_STEP_SUMMARY
+            echo "- Grype scanned" >> $GITHUB_STEP_SUMMARY
+            echo "- SBOM generated" >> $GITHUB_STEP_SUMMARY
+            echo "- Cosign signed (keyless)" >> $GITHUB_STEP_SUMMARY
+            echo "- Provenance attestation" >> $GITHUB_STEP_SUMMARY
           else
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### PR Build (no push)" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Build validated" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Trivy scanned" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Grype scanned" >> $GITHUB_STEP_SUMMARY
+            echo "- Build validated" >> $GITHUB_STEP_SUMMARY
+            echo "- Trivy scanned" >> $GITHUB_STEP_SUMMARY
+            echo "- Grype scanned" >> $GITHUB_STEP_SUMMARY
           fi
 
   # ==============================================================
   # STAGE 6: NOTIFICATION
   # ==============================================================
   notify:
-    name: "📢 Notify"
+    name: "Notify"
     needs: [init, lint, type-check, test, security-sast, security-deps, osv-scan, quality-gate, build-and-push]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
@@ -777,7 +777,7 @@ jobs:
 
       - name: Pipeline Report
         run: |
-          echo "## 📊 CI Pipeline Report" >> $GITHUB_STEP_SUMMARY
+          echo "## CI Pipeline Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -799,7 +799,7 @@ jobs:
   # SCHEDULED: OPENSSF SCORECARD
   # ==============================================================
   scorecard:
-    name: "🏆 OpenSSF Scorecard"
+    name: "OpenSSF Scorecard"
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -829,7 +829,7 @@ jobs:
 
       - name: Scorecard Summary
         run: |
-          echo "## 🏆 OpenSSF Scorecard" >> $GITHUB_STEP_SUMMARY
+          echo "## OpenSSF Scorecard" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Scorecard analysis completed. Results uploaded as artifact." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

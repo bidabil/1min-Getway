@@ -45,7 +45,7 @@ jobs:
   # STAGE 1: VALIDATE INPUT
   # ==============================================================
   validate:
-    name: "✅ Validate Input"
+    name: "Validate Input"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -69,7 +69,7 @@ jobs:
           INPUT_VERSION: ${{ github.event.inputs.version }}
           INPUT_SKIP_CHECK: ${{ github.event.inputs.skip_staging_check }}
         run: |
-          echo "## 📋 Production Deployment Request" >> $GITHUB_STEP_SUMMARY
+          echo "## Production Deployment Request" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Requested Version**: $INPUT_VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Skip Staging Check**: $INPUT_SKIP_CHECK" >> $GITHUB_STEP_SUMMARY
@@ -82,7 +82,7 @@ jobs:
             git fetch --tags
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
             if [[ -z "$LATEST_TAG" ]]; then
-              echo "❌ No tags found in repository" >> $GITHUB_STEP_SUMMARY
+              echo "No tags found in repository" >> $GITHUB_STEP_SUMMARY
               exit 1
             fi
             VERSION="${LATEST_TAG#v}"  # Retirer le 'v' prefix si présent
@@ -109,16 +109,16 @@ jobs:
         run: |
           # Vérifier que l'image existe dans le registry
           if ! docker manifest inspect ${{ steps.resolve.outputs.image_digest }} > /dev/null 2>&1; then
-            echo "❌ Image not found: ${{ steps.resolve.outputs.image_digest }}" >> $GITHUB_STEP_SUMMARY
+            echo "Image not found: ${{ steps.resolve.outputs.image_digest }}" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
-          echo "✅ Image verified in registry" >> $GITHUB_STEP_SUMMARY
+          echo "Image verified in registry" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
   # STAGE 2: STAGING VALIDATION (optionnel)
   # ==============================================================
   staging-check:
-    name: "🔍 Staging Validation"
+    name: "Staging Validation"
     needs: validate
     if: github.event.inputs.skip_staging_check != 'true'
     runs-on: ubuntu-latest
@@ -128,20 +128,20 @@ jobs:
     steps:
       - name: Check Staging Health
         run: |
-          echo "## 🔍 Staging Validation" >> $GITHUB_STEP_SUMMARY
+          echo "## Staging Validation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Vérifier que staging est healthy
           for i in {1..3}; do
             if curl -sf --max-time 10 "${{ env.STAGING_URL }}/health" > /dev/null 2>&1; then
-              echo "✅ Staging is healthy" >> $GITHUB_STEP_SUMMARY
+              echo "Staging is healthy" >> $GITHUB_STEP_SUMMARY
               exit 0
             fi
             echo "Attempt $i failed, retrying..."
             sleep 5
           done
 
-          echo "❌ Staging health check failed" >> $GITHUB_STEP_SUMMARY
+          echo "Staging health check failed" >> $GITHUB_STEP_SUMMARY
           echo "::error::Staging environment is not healthy. Fix staging before deploying to production."
           exit 1
 
@@ -153,9 +153,9 @@ jobs:
           echo "Requested version: ${{ needs.validate.outputs.version }}"
 
           if [[ "$STAGING_VERSION" == "${{ needs.validate.outputs.version }}" ]]; then
-            echo "✅ Version matches staging" >> $GITHUB_STEP_SUMMARY
+            echo "Version matches staging" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠️ Version mismatch with staging (continuing anyway)" >> $GITHUB_STEP_SUMMARY
+            echo "Version mismatch with staging (continuing anyway)" >> $GITHUB_STEP_SUMMARY
           fi
         continue-on-error: true
 
@@ -163,7 +163,7 @@ jobs:
   # STAGE 3: DEPLOY PRODUCTION
   # ==============================================================
   deploy-production:
-    name: "🚀 Deploy Production"
+    name: "Deploy Production"
     needs: [validate, staging-check]
     if: |
       always() &&
@@ -199,7 +199,7 @@ jobs:
           DEPLOYED_BY: ${{ github.actor }}
           SKIP_CHECK: ${{ github.event.inputs.skip_staging_check }}
         run: |
-          echo "## 🚀 Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Image**: \`$IMAGE_DIGEST\`" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
@@ -208,10 +208,10 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [[ "$SKIP_CHECK" == "true" ]]; then
-            echo "⚠️ **WARNING**: Staging validation was skipped!" >> $GITHUB_STEP_SUMMARY
+            echo "**WARNING**: Staging validation was skipped!" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           else
-            echo "✅ Staging validation passed" >> $GITHUB_STEP_SUMMARY
+            echo "Staging validation passed" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -227,13 +227,13 @@ jobs:
 
           echo "deployed=true" >> $GITHUB_OUTPUT
 
-          echo "✅ Production deployment triggered" >> $GITHUB_STEP_SUMMARY
+          echo "Production deployment triggered" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
   # STAGE 4: PRODUCTION SMOKE TESTS
   # ==============================================================
   smoke-test:
-    name: "🔥 Production Smoke Tests"
+    name: "Production Smoke Tests"
     needs: [validate, deploy-production]
     if: needs.deploy-production.outputs.deployed == 'true'
     runs-on: ubuntu-latest
@@ -250,13 +250,13 @@ jobs:
       - name: Health Check
         id: health
         run: |
-          echo "## 🔥 Production Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "## Production Smoke Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "### Health Check" >> $GITHUB_STEP_SUMMARY
           for i in {1..15}; do
             if curl -sf --max-time 10 "${{ env.PRODUCTION_URL }}/health" > /dev/null 2>&1; then
-              echo "✅ Health endpoint: OK" >> $GITHUB_STEP_SUMMARY
+              echo "Health endpoint: OK" >> $GITHUB_STEP_SUMMARY
               echo "health_ok=true" >> $GITHUB_OUTPUT
               break
             fi
@@ -265,7 +265,7 @@ jobs:
           done
 
           if [[ "${{ steps.health.outputs.health_ok }}" != "true" ]]; then
-            echo "❌ Health endpoint: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Health endpoint: FAILED" >> $GITHUB_STEP_SUMMARY
             echo "health_ok=false" >> $GITHUB_OUTPUT
           fi
 
@@ -275,7 +275,7 @@ jobs:
           echo "### Readiness Check" >> $GITHUB_STEP_SUMMARY
           for i in {1..10}; do
             if curl -sf --max-time 10 "${{ env.PRODUCTION_URL }}/ready" > /dev/null 2>&1; then
-              echo "✅ Readiness endpoint: OK" >> $GITHUB_STEP_SUMMARY
+              echo "Readiness endpoint: OK" >> $GITHUB_STEP_SUMMARY
               echo "ready_ok=true" >> $GITHUB_OUTPUT
               break
             fi
@@ -283,7 +283,7 @@ jobs:
           done
 
           if [[ "${{ steps.ready.outputs.ready_ok }}" != "true" ]]; then
-            echo "⚠️ Readiness endpoint: Not available" >> $GITHUB_STEP_SUMMARY
+            echo "Readiness endpoint: Not available" >> $GITHUB_STEP_SUMMARY
           fi
         continue-on-error: true
 
@@ -293,11 +293,11 @@ jobs:
           echo "### API Version Check" >> $GITHUB_STEP_SUMMARY
           RESPONSE=$(curl -sf --max-time 10 "${{ env.PRODUCTION_URL }}/v1/version" 2>/dev/null || echo "")
           if [[ -n "$RESPONSE" ]]; then
-            echo "✅ Version endpoint: OK" >> $GITHUB_STEP_SUMMARY
+            echo "Version endpoint: OK" >> $GITHUB_STEP_SUMMARY
             echo "Response: \`$RESPONSE\`" >> $GITHUB_STEP_SUMMARY
             echo "version_ok=true" >> $GITHUB_OUTPUT
           else
-            echo "⚠️ Version endpoint: Not available" >> $GITHUB_STEP_SUMMARY
+            echo "Version endpoint: Not available" >> $GITHUB_STEP_SUMMARY
           fi
         continue-on-error: true
 
@@ -324,7 +324,7 @@ jobs:
   # STAGE 5: ROLLBACK NOTIFICATION (si échec)
   # ==============================================================
   rollback-check:
-    name: "🔄 Rollback Check"
+    name: "Rollback Check"
     needs: [validate, deploy-production, smoke-test]
     if: |
       always() &&
@@ -338,7 +338,7 @@ jobs:
     steps:
       - name: Rollback Warning
         run: |
-          echo "## 🚨 ROLLBACK REQUIRED" >> $GITHUB_STEP_SUMMARY
+          echo "## ROLLBACK REQUIRED" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Production smoke tests failed!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -359,7 +359,7 @@ jobs:
   # STAGE 6: NOTIFICATION
   # ==============================================================
   notify:
-    name: "📢 Notify"
+    name: "Notify"
     needs: [validate, staging-check, deploy-production, smoke-test]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
@@ -398,7 +398,7 @@ jobs:
 
       - name: Deployment Report
         run: |
-          echo "## 📊 Production Deployment Report" >> $GITHUB_STEP_SUMMARY
+          echo "## Production Deployment Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
