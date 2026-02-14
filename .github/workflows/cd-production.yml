@@ -65,14 +65,17 @@ jobs:
 
       - name: Resolve Version
         id: resolve
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_SKIP_CHECK: ${{ github.event.inputs.skip_staging_check }}
         run: |
           echo "## 📋 Production Deployment Request" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Requested Version**: ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Skip Staging Check**: ${{ github.event.inputs.skip_staging_check }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Requested Version**: $INPUT_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Skip Staging Check**: $INPUT_SKIP_CHECK" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          VERSION="${{ github.event.inputs.version }}"
+          VERSION="$INPUT_VERSION"
 
           if [[ "$VERSION" == "latest" ]]; then
             # Récupérer le dernier tag
@@ -87,7 +90,7 @@ jobs:
           fi
 
           # Déterminer le tag d'image
-          if [[ "${{ github.event.inputs.version }}" == "latest" ]]; then
+          if [[ "$INPUT_VERSION" == "latest" ]]; then
             IMAGE_TAG="latest"
           elif [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
             IMAGE_TAG="$VERSION"
@@ -190,16 +193,21 @@ jobs:
 
       - name: Deploy to Production
         id: deploy
+        env:
+          IMAGE_DIGEST: ${{ needs.validate.outputs.image_digest }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          DEPLOYED_BY: ${{ github.actor }}
+          SKIP_CHECK: ${{ github.event.inputs.skip_staging_check }}
         run: |
           echo "## 🚀 Production Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image**: \`${{ needs.validate.outputs.image_digest }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Version**: ${{ needs.validate.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Deployed By**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image**: \`$IMAGE_DIGEST\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed By**: $DEPLOYED_BY" >> $GITHUB_STEP_SUMMARY
           echo "**Deployment Time**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [[ "${{ github.event.inputs.skip_staging_check }}" == "true" ]]; then
+          if [[ "$SKIP_CHECK" == "true" ]]; then
             echo "⚠️ **WARNING**: Staging validation was skipped!" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           else
