@@ -1,20 +1,37 @@
-
 # ==============================================================
-# CI/CD Pipeline - 1min-Gateway (Enterprise Ultimate v5.1)
+# CI Pipeline - 1min-Gateway
 # ==============================================================
-# Standards appliqués:
-# - SLSA Level 3 (Supply Chain Security)
-# - OpenSSF Scorecard
-# - OWASP DevSecOps
-# - GitOps Ready
-# - Multi-environment deployment
-# - Smoke tests enabled
-# - Full observability
+# Workflow réutilisable pour l'intégration continue
+# - Build, Test, Security scans
+# - Ne fait PAS de déploiement
 # ==============================================================
 
-name: 1min-Gateway CI/CD
+name: CI
 
 on:
+  workflow_call:
+    inputs:
+      skip_tests:
+        description: "Skip tests (emergency only)"
+        type: boolean
+        default: false
+      upload_artifacts:
+        description: "Upload build artifacts"
+        type: boolean
+        default: true
+    outputs:
+      version:
+        description: "Version built"
+        value: ${{ jobs.init.outputs.version }}
+      sha_short:
+        description: "Short SHA"
+        value: ${{ jobs.init.outputs.sha_short }}
+      quality_passed:
+        description: "Quality gate passed"
+        value: ${{ jobs.quality-gate.outputs.passed }}
+  pull_request:
+    branches: ["main", "develop"]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: ["main", "develop"]
     tags: ["v*"]
@@ -24,30 +41,12 @@ on:
       - ".github/ISSUE_TEMPLATE/**"
       - "LICENSE"
       - ".gitignore"
-  pull_request:
-    branches: ["main", "develop"]
-    types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     - cron: "0 6 * * 1"  # Security scan every Monday 6 AM UTC
     - cron: "0 0 1 * *"  # Monthly full scan
-  workflow_dispatch:
-    inputs:
-      skip_tests:
-        description: "Skip tests (emergency only)"
-        type: boolean
-        default: false
-      environment:
-        description: "Target environment"
-        type: choice
-        options: [staging, production]
-        default: staging
-      debug_enabled:
-        description: "Enable debug mode"
-        type: boolean
-        default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -67,7 +66,7 @@ jobs:
   # STAGE 0: INITIALIZATION
   # ==============================================================
   init:
-    name: "🚀 Initialize Pipeline"
+    name: "🚀 Initialize"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -132,7 +131,7 @@ jobs:
 
       - name: Pipeline Info
         run: |
-          echo "## 🚀 Pipeline Initialized" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 CI Pipeline Initialized" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Variable | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -304,7 +303,7 @@ jobs:
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && inputs.upload_artifacts == true
         with:
           name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
           path: |
@@ -357,7 +356,6 @@ jobs:
           pip install ruff==${{ env.RUFF_VERSION }}
           ruff check . --select S --output-format=github
 
-      # ✅ FIX: Semgrep v1 → v2 (licence LGPL-2.1 claire)
       - name: Semgrep Scan
         uses: semgrep/semgrep-action@v2
         with:
@@ -378,9 +376,6 @@ jobs:
         with:
           category: "/language:python"
 
-  # ==============================================================
-  # OSV Scanner - Workflow Réutilisable (Recommandé par Google)
-  # ==============================================================
   osv-scan:
     name: "🔒 OSV Scanner"
     needs: init
@@ -433,7 +428,7 @@ jobs:
 
       - name: Upload Security Results
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && inputs.upload_artifacts == true
         with:
           name: dependency-scan-results
           path: |
@@ -552,86 +547,15 @@ jobs:
         run: exit 1
 
   # ==============================================================
-  # STAGE 5: RELEASE
+  # STAGE 5: BUILD & PUSH (sans déploiement)
   # ==============================================================
-  release:
-    name: "🏷️ Semantic Release"
-    needs: [init, quality-gate]
-    if: |
-      needs.init.outputs.is_main == 'true' &&
-      needs.quality-gate.outputs.passed == 'true' &&
-      github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-    outputs:
-      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
-      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - name: Semantic Release
-        id: semantic
-        uses: cycjimmy/semantic-release-action@v4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Release Summary
-        if: steps.semantic.outputs.new_release_published == 'true'
-        run: |
-          echo "## 🎉 New Release Published" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version**: v${{ steps.semantic.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
-
-  # ==============================================================
-  # STAGE 6: BUILD & PUSH
-  # ==============================================================
-  build-validation:
-    name: "🔨 Build Validation"
-    needs: [init, quality-gate]
-    if: |
-      github.event_name == 'pull_request' &&
-      needs.quality-gate.outputs.passed == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          platforms: linux/amd64
-          tags: ${{ env.IMAGE_NAME }}:pr-${{ github.event.pull_request.number }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=cacheonly
-
-      - name: Summary
-        run: echo "✅ Docker build validation passed" >> $GITHUB_STEP_SUMMARY
-
-  # ✅ FIX CRITIQUE: Renommé build-push → build-and-push + condition PR
   build-and-push:
     name: "📦 Build & Push"
-    needs: [init, quality-gate, release]
-    # ✅ FIX: S'exécute en PR (sans push) OU après release sur main
+    needs: [init, quality-gate]
     if: |
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'push' && needs.release.outputs.new_release_published == 'true')
+      always() &&
+      !cancelled() &&
+      needs.quality-gate.outputs.passed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -678,17 +602,17 @@ jobs:
             ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}
             ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
           tags: |
-            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' }}
-            type=semver,pattern={{version}},value=${{ needs.release.outputs.new_release_version }},enable=${{ github.event_name != 'pull_request' }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.new_release_version }},enable=${{ github.event_name != 'pull_request' }}
-            type=semver,pattern={{major}},value=${{ needs.release.outputs.new_release_version }},enable=${{ github.event_name != 'pull_request' }}
+            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}},value=${{ needs.init.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.init.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
+            type=semver,pattern={{major}},value=${{ needs.init.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
             type=sha,prefix=,format=short
             type=ref,event=pr
           labels: |
             org.opencontainers.image.title=1min-Gateway
             org.opencontainers.image.description=Intelligent API Gateway for AI models
             org.opencontainers.image.vendor=Billel Attafi
-            org.opencontainers.image.version=${{ needs.release.outputs.new_release_version || github.sha }}
+            org.opencontainers.image.version=${{ needs.init.outputs.version }}
 
       - name: Build for scan
         uses: docker/build-push-action@v6
@@ -698,7 +622,7 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:scan
           cache-from: type=gha
           build-args: |
-            VERSION=${{ needs.release.outputs.new_release_version || '0.0.0-dev' }}
+            VERSION=${{ needs.init.outputs.version }}
             COMMIT=${{ needs.init.outputs.sha_short }}
 
       - name: Trivy Scan
@@ -725,7 +649,7 @@ jobs:
           output-format: sarif
           severity-cutoff: high
 
-      # ✅ FIX: Push seulement si PAS en PR
+      # Build et Push (push seulement si PAS en PR)
       - name: Build and Push
         id: build
         uses: docker/build-push-action@v6
@@ -740,7 +664,7 @@ jobs:
           provenance: mode=max
           sbom: true
           build-args: |
-            VERSION=${{ needs.release.outputs.new_release_version || '0.0.0-dev' }}
+            VERSION=${{ needs.init.outputs.version }}
             COMMIT=${{ needs.init.outputs.sha_short }}
 
       # Les étapes suivantes seulement si on a push (pas en PR)
@@ -792,7 +716,7 @@ jobs:
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Event | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Push | ${{ github.event_name != 'pull_request' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | ${{ needs.release.outputs.new_release_version || 'N/A (PR)' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ needs.init.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Digest | \`${{ steps.build.outputs.digest || 'N/A' }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Platforms | linux/amd64, linux/arm64 |" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
@@ -812,170 +736,11 @@ jobs:
           fi
 
   # ==============================================================
-  # STAGE 7: DEPLOY
-  # ==============================================================
-  deploy-staging:
-    name: "🚀 Deploy Staging"
-    needs: [init, build-and-push]
-    if: |
-      github.event_name != 'pull_request' &&
-      needs.build-and-push.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: staging
-      url: https://staging.1min-gateway.example.com
-    permissions:
-      contents: read
-    outputs:
-      deployed: ${{ steps.deploy.outputs.deployed }}
-    steps:
-      - name: Deploy to Staging
-        id: deploy
-        run: |
-          echo "## 🚀 Staging Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Image: \`${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${{ needs.build-and-push.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Deployment method: GitOps (ArgoCD/Flux)" >> $GITHUB_STEP_SUMMARY
-          echo "deployed=true" >> $GITHUB_OUTPUT
-
-  # ==============================================================
-  # STAGE 8: SMOKE TESTS
-  # ==============================================================
-  smoke-test:
-    name: "🔥 Smoke Tests"
-    needs: [init, build-and-push, deploy-staging]
-    if: needs.deploy-staging.outputs.deployed == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Wait for deployment
-        run: sleep 30
-
-      - name: Health Check
-        id: health
-        run: |
-          echo "## 🔥 Smoke Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "### Health Check" >> $GITHUB_STEP_SUMMARY
-          for i in {1..10}; do
-            if curl -sf --max-time 10 "https://staging.1min-gateway.example.com/health" > /dev/null 2>&1; then
-              echo "✅ Health endpoint: OK" >> $GITHUB_STEP_SUMMARY
-              echo "health_ok=true" >> $GITHUB_OUTPUT
-              break
-            fi
-            echo "Attempt $i failed, retrying in 10s..."
-            sleep 10
-          done
-
-          if [[ "${{ steps.health.outputs.health_ok }}" != "true" ]]; then
-            echo "❌ Health endpoint: FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "health_ok=false" >> $GITHUB_OUTPUT
-          fi
-        continue-on-error: true
-
-      - name: Readiness Check
-        id: ready
-        run: |
-          echo "### Readiness Check" >> $GITHUB_STEP_SUMMARY
-          for i in {1..5}; do
-            if curl -sf --max-time 10 "https://staging.1min-gateway.example.com/ready" > /dev/null 2>&1; then
-              echo "✅ Readiness endpoint: OK" >> $GITHUB_STEP_SUMMARY
-              echo "ready_ok=true" >> $GITHUB_OUTPUT
-              break
-            fi
-            sleep 5
-          done
-
-          if [[ "${{ steps.ready.outputs.ready_ok }}" != "true" ]]; then
-            echo "⚠️ Readiness endpoint: Not available (may be expected)" >> $GITHUB_STEP_SUMMARY
-          fi
-        continue-on-error: true
-
-      - name: API Version Check
-        id: version
-        run: |
-          echo "### API Version Check" >> $GITHUB_STEP_SUMMARY
-          RESPONSE=$(curl -sf --max-time 10 "https://staging.1min-gateway.example.com/v1/version" 2>/dev/null || echo "")
-          if [[ -n "$RESPONSE" ]]; then
-            echo "✅ Version endpoint: OK" >> $GITHUB_STEP_SUMMARY
-            echo "Response: \`$RESPONSE\`" >> $GITHUB_STEP_SUMMARY
-            echo "version_ok=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ Version endpoint: Not available" >> $GITHUB_STEP_SUMMARY
-          fi
-        continue-on-error: true
-
-      - name: Models Endpoint Check
-        id: models
-        run: |
-          echo "### Models Endpoint Check" >> $GITHUB_STEP_SUMMARY
-          if curl -sf --max-time 10 "https://staging.1min-gateway.example.com/v1/models" > /dev/null 2>&1; then
-            echo "✅ Models endpoint: OK" >> $GITHUB_STEP_SUMMARY
-            echo "models_ok=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ Models endpoint: Not available (may require auth)" >> $GITHUB_STEP_SUMMARY
-          fi
-        continue-on-error: true
-
-      - name: Smoke Test Summary
-        run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Summary" >> $GITHUB_STEP_SUMMARY
-
-          PASSED=0
-          TOTAL=4
-
-          [[ "${{ steps.health.outputs.health_ok }}" == "true" ]] && ((PASSED++))
-          [[ "${{ steps.ready.outputs.ready_ok }}" == "true" ]] && ((PASSED++))
-          [[ "${{ steps.version.outputs.version_ok }}" == "true" ]] && ((PASSED++))
-          [[ "${{ steps.models.outputs.models_ok }}" == "true" ]] && ((PASSED++))
-
-          echo "Smoke tests passed: $PASSED/$TOTAL" >> $GITHUB_STEP_SUMMARY
-
-          if [[ "${{ steps.health.outputs.health_ok }}" != "true" ]]; then
-            echo "::warning::Health check failed - deployment may have issues"
-          fi
-
-  # ==============================================================
-  # STAGE 9: DEPLOY PRODUCTION
-  # ==============================================================
-  deploy-production:
-    name: "🚀 Deploy Production"
-    needs: [init, build-and-push, deploy-staging, smoke-test]
-    if: |
-      github.event_name != 'pull_request' &&
-      needs.build-and-push.result == 'success' &&
-      needs.smoke-test.result == 'success' &&
-      (inputs.environment == 'production' || github.event_name == 'push')
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment:
-      name: production
-      url: https://1min-gateway.example.com
-    permissions:
-      contents: read
-    steps:
-      - name: Deploy to Production
-        run: |
-          echo "## 🚀 Production Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Image: \`${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${{ needs.build-and-push.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Staging smoke tests passed" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Production deployment approved" >> $GITHUB_STEP_SUMMARY
-
-  # ==============================================================
-  # STAGE 10: NOTIFICATION
+  # STAGE 6: NOTIFICATION
   # ==============================================================
   notify:
     name: "📢 Notify"
-    needs: [init, lint, type-check, test, security-sast, security-deps, osv-scan, quality-gate, release, build-and-push, deploy-staging, smoke-test, deploy-production]
+    needs: [init, lint, type-check, test, security-sast, security-deps, osv-scan, quality-gate, build-and-push]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -985,26 +750,14 @@ jobs:
       - name: Determine Status
         id: status
         run: |
-          if [[ "${{ needs.deploy-production.result }}" == "success" ]]; then
+          if [[ "${{ needs.build-and-push.result }}" == "success" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
-            echo "message=Production deployment successful" >> $GITHUB_OUTPUT
-            echo "color=#36a64f" >> $GITHUB_OUTPUT
-          elif [[ "${{ needs.smoke-test.result }}" == "failure" ]]; then
-            echo "status=failure" >> $GITHUB_OUTPUT
-            echo "message=Smoke tests failed" >> $GITHUB_OUTPUT
-            echo "color=#dc3545" >> $GITHUB_OUTPUT
-          elif [[ "${{ needs.build-and-push.result }}" == "success" ]]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "message=Build and staging deployment successful" >> $GITHUB_OUTPUT
+            echo "message=Build successful" >> $GITHUB_OUTPUT
             echo "color=#36a64f" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.quality-gate.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
             echo "message=Quality gate failed" >> $GITHUB_OUTPUT
             echo "color=#dc3545" >> $GITHUB_OUTPUT
-          elif [[ "${{ needs.release.outputs.new_release_published }}" != "true" && "${{ needs.init.outputs.is_main }}" == "true" ]]; then
-            echo "status=skipped" >> $GITHUB_OUTPUT
-            echo "message=No release triggered (no semantic commits)" >> $GITHUB_OUTPUT
-            echo "color=#ffc107" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.init.outputs.is_pr }}" == "true" ]]; then
             if [[ "${{ needs.quality-gate.outputs.passed }}" == "true" ]]; then
               echo "status=success" >> $GITHUB_OUTPUT
@@ -1023,7 +776,7 @@ jobs:
 
       - name: Pipeline Report
         run: |
-          echo "## 📊 Pipeline Report" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 CI Pipeline Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -1039,11 +792,7 @@ jobs:
           echo "| Security | Dependencies | ${{ needs.security-deps.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Security | OSV Scanner | ${{ needs.osv-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gate | Quality Gate | ${{ needs.quality-gate.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Release | Semantic Release | ${{ needs.release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | Build & Push | ${{ needs.build-and-push.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deploy | Staging | ${{ needs.deploy-staging.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Test | Smoke Tests | ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deploy | Production | ${{ needs.deploy-production.result }} |" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
   # SCHEDULED: OPENSSF SCORECARD
