@@ -386,6 +386,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read
     with:
       scan-args: |-
         --recursive
