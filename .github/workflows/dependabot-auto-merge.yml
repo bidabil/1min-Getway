@@ -78,22 +78,6 @@ jobs:
         run: |
           echo "✅ Test Status: ${{ steps.wait-for-tests.outputs.conclusion }}"
 
-      # Optionnel: Attendre aussi le build de validation (si configuré)
-      - name: Wait for Build Validation (PR only)
-        uses: fountainhead/action-wait-for-check@v1.2.0
-        id: wait-for-build
-        continue-on-error: true  # Ne pas bloquer si ce job n'existe pas
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "build-validation"
-          ref: ${{ github.event.pull_request.head.sha }}
-          timeoutSeconds: 900  # 15 minutes max
-
-      - name: Build Validation Status
-        if: steps.wait-for-build.outcome == 'success'
-        run: |
-          echo "🐳 Build Validation Status: ${{ steps.wait-for-build.outputs.conclusion }}"
-
       # ============================================================
       # RÈGLE 1 : Auto-merge des patchs de sécurité (toujours)
       # ============================================================
@@ -178,7 +162,7 @@ jobs:
         run: |
           echo "❌ CI checks failed - Not approving"
           gh pr comment "${{ github.event.pull_request.html_url }}" \
-            --body "❌ **CI checks failed**\n\nThis PR will not be auto-merged. Please investigate the test failures:\n\n- Test status: ${{ steps.wait-for-tests.outputs.conclusion }}\n- Build status: ${{ steps.wait-for-build.outputs.conclusion || 'N/A' }}\n\nFix the issues and push again to re-trigger the checks."
+            --body "❌ **CI checks failed**\n\nThis PR will not be auto-merged. Please investigate the test failures:\n\n- Quality Gate status: ${{ steps.wait-for-tests.outputs.conclusion }}\n\nFix the issues and push again to re-trigger the checks."
           exit 1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
