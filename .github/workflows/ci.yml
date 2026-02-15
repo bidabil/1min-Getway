@@ -627,7 +627,7 @@ jobs:
             COMMIT=${{ needs.init.outputs.sha_short }}
 
       - name: Trivy Scan
-        uses: aquasecurity/trivy-action@0.31.0
+        uses: aquasecurity/trivy-action@0.34.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:scan
           format: "sarif"
