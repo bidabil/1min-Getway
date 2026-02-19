@@ -1,16 +1,18 @@
-# tests/conftest.py
+# tests/conftest_fastapi.py
 """
-Configuration centralisée des tests.
-Fixtures réutilisables pour toute la suite de tests.
-Supporte à la fois Flask (legacy) et FastAPI.
+Configuration des tests pour FastAPI.
+Ce fichier remplace conftest.py pour l'application FastAPI.
 """
 
 import os
 import sys
+from collections.abc import AsyncGenerator
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 
 # Ajouter src au path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -28,12 +30,13 @@ def app():
     return app_instance
 
 
-@pytest.fixture
-def client(app):
-    """Client de test synchrone pour FastAPI (via TestClient)."""
-    from fastapi.testclient import TestClient
-
-    with TestClient(app) as client:
+@pytest_asyncio.fixture
+async def client(app) -> AsyncGenerator[AsyncClient, None]:
+    """Client de test async pour FastAPI."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
         yield client
 
 
@@ -123,16 +126,6 @@ def multimodal_chat_request() -> dict[str, Any]:
 
 
 @pytest.fixture
-def conversation_messages() -> list[dict[str, str]]:
-    """Messages de conversation multi-tours."""
-    return [
-        {"role": "user", "content": "Hello"},
-        {"role": "assistant", "content": "Hi there! How can I help you?"},
-        {"role": "user", "content": "What is the weather today?"},
-    ]
-
-
-@pytest.fixture
 def empty_messages_request() -> dict[str, Any]:
     """Requête sans messages."""
     return {"model": "gpt-4o", "messages": []}
@@ -173,29 +166,8 @@ def chat_request_factory(valid_api_key):
     return _create
 
 
-@pytest.fixture
-def conversation_context_factory():
-    """Factory pour créer des ConversationContext."""
-    from src.domain.ports import ConversationContext
-
-    def _create(
-        type: str = "CHAT_WITH_AI",
-        session_id: str = None,
-        image_paths: list = None,
-        prompt_object: dict = None,
-    ):
-        return ConversationContext(
-            type=type,
-            session_id=session_id,
-            image_paths=image_paths or [],
-            prompt_object=prompt_object or {"prompt": "Test", "isMixed": False, "webSearch": False},
-        )
-
-    return _create
-
-
 # ============================================================================
-# FIXTURES: Mock Services (Ports)
+# FIXTURES: Mock Services
 # ============================================================================
 @pytest.fixture
 def mock_asset_service():
@@ -264,53 +236,6 @@ def mock_1min_streaming_lines() -> list[bytes]:
     ]
 
 
-@pytest.fixture
-def mock_1min_error_response() -> dict[str, Any]:
-    """Réponse d'erreur de l'API 1min.ai."""
-    return {"errorCode": "HTTP_EXCEPTION", "message": "Something went wrong"}
-
-
-# ============================================================================
-# FIXTURES: HTTP Mocks
-# ============================================================================
-@pytest.fixture
-def mock_http_response(mock_1min_success_response):
-    """Mock d'une réponse HTTP réussie."""
-    mock = MagicMock()
-    mock.status_code = 200
-    mock.json.return_value = mock_1min_success_response
-    mock.raise_for_status = MagicMock()
-    mock.headers = {"Content-Type": "application/json"}
-    return mock
-
-
-@pytest.fixture
-def mock_http_streaming_response(mock_1min_streaming_lines):
-    """Mock d'une réponse HTTP streaming."""
-    mock = MagicMock()
-    mock.status_code = 200
-    mock.iter_lines.return_value = iter(mock_1min_streaming_lines)
-    mock.raise_for_status = MagicMock()
-    mock.headers = {"Content-Type": "text/event-stream"}
-    return mock
-
-
-@pytest.fixture
-def mock_requests_post(mock_http_response):
-    """Mock requests.post global."""
-    with patch("requests.post") as mock:
-        mock.return_value = mock_http_response
-        yield mock
-
-
-@pytest.fixture
-def mock_routes_requests_post(mock_http_response):
-    """Mock requests.post dans routes.py."""
-    with patch("src.routes.requests.post") as mock:
-        mock.return_value = mock_http_response
-        yield mock
-
-
 # ============================================================================
 # FIXTURES: Test Data
 # ============================================================================
@@ -318,12 +243,6 @@ def mock_routes_requests_post(mock_http_response):
 def sample_base64_image() -> str:
     """Image PNG 1x1 pixel en base64."""
     return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-
-
-@pytest.fixture
-def sample_external_image_url() -> str:
-    """URL d'image externe."""
-    return "https://example.com/image.jpg"
 
 
 @pytest.fixture
@@ -368,13 +287,6 @@ class APIAssertions:
                 assert "code" in error_data
 
     @staticmethod
-    def assert_streaming(response):
-        """Vérifie une réponse streaming."""
-        assert response.status_code == 200
-        content = response.text
-        assert "data:" in content
-
-    @staticmethod
     def assert_openai_format(data: dict):
         """Vérifie le format OpenAI."""
         required_fields = ["id", "object", "created", "model", "choices", "usage"]
@@ -390,7 +302,7 @@ def api_assert():
 
 
 # ============================================================================
-# HELPERS: Result Pattern
+# FIXTURES: Result Pattern
 # ============================================================================
 @pytest.fixture
 def success_class():

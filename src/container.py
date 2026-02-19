@@ -8,7 +8,7 @@ from .application.use_cases import (
     ChatCompletionUseCase,
     ValidateApiKeyUseCase,
 )
-from .config import AVAILABLE_MODELS, ONE_MIN_ASSET_API_URL
+from .config import API_KEY_VALIDATION_MODE, AVAILABLE_MODELS, ONE_MIN_ASSET_API_URL
 from .domain.services.chat_service import ChatService
 from .infrastructure.adapters.one_min_asset_adapter import OneMinAssetAdapter
 from .infrastructure.adapters.one_min_conversation_adapter import OneMinConversationAdapter
@@ -37,7 +37,9 @@ class Container:
 
         # --- Application Use Cases ---
         self._chat_completion_use_case = ChatCompletionUseCase(self._chat_service)
-        self._validate_api_key_use_case = ValidateApiKeyUseCase()
+        self._validate_api_key_use_case = ValidateApiKeyUseCase(
+            validation_mode=API_KEY_VALIDATION_MODE
+        )
         self._calculate_tokens_use_case = CalculateTokensUseCase(self._chat_service)
 
     # --- Getters ---

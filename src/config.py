@@ -87,6 +87,9 @@ LOG_FILE: Final[str] = os.getenv("LOG_FILE", "/app/logs/gateway.log")
 SECRET_KEY: Final[str] = os.getenv("SECRET_KEY", "CHANGE_ME_IN_PRODUCTION")
 CORS_ORIGINS: Final[str] = os.getenv("CORS_ORIGINS", "*")
 
+# Mode de validation API Key: "fast" (format only) ou "full" (avec vérification API)
+API_KEY_VALIDATION_MODE: Final[str] = os.getenv("API_KEY_VALIDATION_MODE", "fast")
+
 
 # ============================================================================
 # VALIDATION DE LA CONFIGURATION
