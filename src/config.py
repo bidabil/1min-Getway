@@ -108,6 +108,12 @@ def validate_config() -> None:
             errors.append("❌ SECRET_KEY doit être changée en production")
         if DEBUG:
             logger.warning("⚠️ DEBUG=True en production - Non recommandé")
+        if CORS_ORIGINS == "*":
+            logger.warning(
+                "⚠️ CORS_ORIGINS='*' en production - "
+                "Cela permet l'accès depuis n'importe quelle origine. "
+                "Définissez CORS_ORIGINS avec les domaines autorisés."
+            )
 
     # Vérification des modèles
     if not AVAILABLE_MODELS:
