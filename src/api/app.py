@@ -123,9 +123,18 @@ def create_app() -> tuple[FastAPI, logging.Logger]:
     )
 
     # Configuration CORS
+    # Handle CORS origins: empty string (no CORS), "*" (wildcard), or comma-separated list
+    if CORS_ORIGINS == "*":
+        cors_origins = ["*"]
+    elif CORS_ORIGINS:
+        cors_origins = [origin.strip() for origin in CORS_ORIGINS.split(",") if origin.strip()]
+    else:
+        # Default: no CORS allowed - must be explicitly configured
+        cors_origins = []
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if CORS_ORIGINS == "*" else CORS_ORIGINS.split(","),
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

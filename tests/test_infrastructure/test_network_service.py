@@ -291,3 +291,43 @@ class TestNetworkServiceIntegration:
             json_response.headers["X-Request-ID"],
         ]
         assert len(set(ids)) == 3
+
+
+class TestEmptyCorsOrigins:
+    """Tests pour le cas où CORS_ORIGINS est vide (sécurité par défaut)."""
+
+    def test_options_request_no_cors_header_when_empty(self):
+        """Teste que le header CORS n'est pas ajouté quand CORS_ORIGINS est vide."""
+        with patch("src.infrastructure.network_service.CORS_ORIGINS", ""):
+            result = handle_options_request()
+
+            # Le header CORS ne doit pas être présent
+            assert "Access-Control-Allow-Origin" not in result.headers
+            # Les autres headers doivent être présents
+            assert "Access-Control-Allow-Headers" in result.headers
+            assert "Access-Control-Allow-Methods" in result.headers
+
+    def test_set_response_headers_no_cors_when_empty(self):
+        """Teste que le header CORS n'est pas ajouté quand CORS_ORIGINS est vide."""
+        with patch("src.infrastructure.network_service.CORS_ORIGINS", ""):
+            mock_response = Mock(spec=Response)
+            mock_response.headers = {}
+
+            set_response_headers(mock_response)
+
+            # Le header CORS ne doit pas être présent
+            assert "Access-Control-Allow-Origin" not in mock_response.headers
+            # Les autres headers doivent être présents
+            assert mock_response.headers["Content-Type"] == "application/json"
+            assert "X-Request-ID" in mock_response.headers
+
+    def test_create_json_response_no_cors_when_empty(self):
+        """Teste que le header CORS n'est pas ajouté quand CORS_ORIGINS est vide."""
+        with patch("src.infrastructure.network_service.CORS_ORIGINS", ""):
+            result = create_json_response({"key": "value"})
+
+            # Le header CORS ne doit pas être présent
+            assert "Access-Control-Allow-Origin" not in result.headers
+            # Les autres headers doivent être présents
+            assert result.headers["Content-Type"] == "application/json"
+            assert "X-Request-ID" in result.headers
