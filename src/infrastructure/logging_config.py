@@ -175,7 +175,7 @@ def setup_logging(
 
     # Set formatter
     if json_format:
-        formatter = JSONFormatter(include_extra=include_extra)
+        formatter: logging.Formatter = JSONFormatter(include_extra=include_extra)
     else:
         # Plain text format for development
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

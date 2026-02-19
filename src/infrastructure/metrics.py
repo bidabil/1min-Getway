@@ -36,7 +36,7 @@ class Counter:
         self.name = name
         self.description = description
         self.label_names = label_names or []
-        self._values: dict[tuple, float] = {}
+        self._values: dict[tuple[tuple[str, str], ...], float] = {}
 
     def inc(self, amount: float = 1.0, **labels: str) -> None:
         """Increment the counter by amount."""
@@ -76,7 +76,7 @@ class Gauge:
         self.name = name
         self.description = description
         self.label_names = label_names or []
-        self._values: dict[tuple, float] = {}
+        self._values: dict[tuple[tuple[str, str], ...], float] = {}
 
     def set(self, value: float, **labels: str) -> None:
         """Set the gauge to a specific value."""
@@ -135,8 +135,8 @@ class Histogram:
         self.description = description
         self.buckets = sorted(buckets or self.DEFAULT_BUCKETS)
         self.label_names = label_names or []
-        self._counts: dict[tuple, dict[float, int]] = {}
-        self._sums: dict[tuple, float] = {}
+        self._counts: dict[tuple[tuple[str, str], ...], dict[float, int]] = {}
+        self._sums: dict[tuple[tuple[str, str], ...], float] = {}
 
     def observe(self, value: float, **labels: str) -> None:
         """Observe a value."""

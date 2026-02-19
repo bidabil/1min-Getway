@@ -43,7 +43,7 @@ class InMemoryRateLimitStore:
     For production, consider using Redis or Memcached for distributed rate limiting.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._store: dict[str, UsageRecord] = {}
 
     def get(self, key: str) -> UsageRecord | None:

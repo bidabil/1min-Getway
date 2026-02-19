@@ -43,7 +43,7 @@ def set_response_headers(response: Response) -> Response:
     return response
 
 
-def create_json_response(content: dict, status_code: int = 200) -> JSONResponse:
+def create_json_response(content: dict[str, Any], status_code: int = 200) -> JSONResponse:
     """
     Create a JSON response with standard headers.
     """

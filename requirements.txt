@@ -10,6 +10,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.10.0
+starlette==0.47.2  # Fixed vulnerability GHSA-2c2j-9gv5-cj73 and GHSA-f96h-pmfr-66vw
 
 # --- Network & API ---
 requests==2.32.5

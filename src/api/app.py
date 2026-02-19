@@ -10,8 +10,9 @@ from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
 import coloredlogs
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -148,10 +149,8 @@ def create_app() -> tuple[FastAPI, logging.Logger]:
     return app, logger
 
 
-async def rate_limit_exceeded_handler(request, exc):
+async def rate_limit_exceeded_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handler pour les erreurs de rate limiting."""
-    from fastapi.responses import JSONResponse
-
     return JSONResponse(
         status_code=429,
         content={

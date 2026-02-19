@@ -50,7 +50,7 @@ class ComponentHealth:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON response."""
-        result = {
+        result: dict[str, Any] = {
             "status": self.status.value,
             "message": self.message,
         }

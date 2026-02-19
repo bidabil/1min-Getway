@@ -299,7 +299,7 @@ async def chat_completions(
     request: Request,
     body: ChatCompletionRequest,
     api_key: str = Depends(extract_api_key),
-):
+) -> JSONResponse | StreamingResponse:
     """
     Endpoint principal de chat completion.
 
@@ -325,7 +325,7 @@ async def chat_completions(
     ]
 
     # Extra params pour 1min.ai
-    extra_params = {}
+    extra_params: dict[str, Any] = {}
     if body.web_search:
         extra_params["web_search"] = body.web_search
     if body.file_ids:
