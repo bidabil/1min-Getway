@@ -134,12 +134,11 @@ def create_app() -> tuple[FastAPI, logging.Logger]:
         # Default: no CORS allowed - must be explicitly configured
         cors_origins = []
 
-    # nosemgrep: python.fastapi.security.wildcard-cors.wildcard-cors
     # Wildcard CORS is only possible through explicit configuration (CORS_ORIGINS="*")
     # Default is secure (empty string) - see src/config.py
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins,
+        allow_origins=cors_origins,  # nosemgrep: python.fastapi.security.wildcard-cors.wildcard-cors
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
