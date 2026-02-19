@@ -4,6 +4,7 @@ Supports multiple model families with proper encoding.
 """
 
 import logging
+from typing import Any
 
 import tiktoken
 from mistral_common.protocol.instruct.messages import UserMessage
@@ -11,6 +12,29 @@ from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
 logger = logging.getLogger("1min-gateway.token-service")
+
+
+def _sanitize_for_log(value: Any) -> str:
+    """
+    Sanitize a value before logging to reduce risk of log injection.
+
+    - Ensures the returned value is always a string.
+    - Removes CR, LF and TAB characters to prevent log injection via newlines.
+    - Truncates overly long values to avoid log flooding.
+    """
+    # Convert non-string values to a safe string representation
+    if not isinstance(value, str):
+        value = repr(value)
+
+    # Remove characters that can break log formatting
+    sanitized = value.replace("\r", "").replace("\n", "").replace("\t", " ")
+
+    # Limit length to avoid excessively large log entries
+    max_length = 100
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length] + "…"
+
+    return sanitized
 
 
 def calculate_token(sentence: str, model: str = "gpt-4o") -> int:
@@ -31,6 +55,7 @@ def calculate_token(sentence: str, model: str = "gpt-4o") -> int:
 
     try:
         model_lower = model.lower()
+        safe_model = _sanitize_for_log(model)
 
         # --- ANTHROPIC CLAUDE MODELS ---
         # Claude has specific tokenization (approximation)
@@ -38,7 +63,7 @@ def calculate_token(sentence: str, model: str = "gpt-4o") -> int:
             # Claude models use a different tokenizer
             # Approximation: 1 token ≈ 3.5 characters for Claude
             token_count = max(1, len(text) // 3)
-            logger.debug(f"TOKEN | Claude model {model}: {token_count} tokens")
+            logger.debug("TOKEN | Claude model %s: %d tokens", safe_model, token_count)
             return token_count
 
         # --- MISTRAL FAMILY ---
@@ -53,10 +78,10 @@ def calculate_token(sentence: str, model: str = "gpt-4o") -> int:
                     )
                 )
                 token_count = len(tokenized.tokens)
-                logger.debug(f"TOKEN | Mistral model {model}: {token_count} tokens")
+                logger.debug("TOKEN | Mistral model %s: %d tokens", safe_model, token_count)
                 return token_count
             except Exception as e:
-                logger.warning(f"TOKEN | Fallback for Mistral: {str(e)}")
+                logger.warning("TOKEN | Fallback for Mistral: %s", _sanitize_for_log(str(e)))
                 # Fallback to cl100k_base
                 encoding = tiktoken.get_encoding("cl100k_base")
                 return len(encoding.encode(text))
@@ -70,10 +95,12 @@ def calculate_token(sentence: str, model: str = "gpt-4o") -> int:
             encoding = tiktoken.get_encoding("cl100k_base")
 
         token_count = len(encoding.encode(text))
-        logger.debug(f"TOKEN | {model}: {token_count} tokens")
+        logger.debug("TOKEN | %s: %d tokens", safe_model, token_count)
         return token_count
 
     except Exception as e:
-        logger.error(f"TOKEN | Error for {model}: {str(e)[:100]}")
+        logger.error(
+            "TOKEN | Error for %s: %s", _sanitize_for_log(model), _sanitize_for_log(str(e))
+        )
         # Safe fallback: standard OpenAI approximation
         return max(1, len(text) // 4)
