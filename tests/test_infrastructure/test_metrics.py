@@ -310,14 +310,14 @@ class TestMetricsRegistry:
     def test_gauge_factory(self):
         """Test gauge factory method."""
         registry = MetricsRegistry(namespace="test")
-        gauge = registry.gauge("connections", "Active connections")
+        registry.gauge("connections", "Active connections")
 
         assert "test_connections" in registry._metrics
 
     def test_histogram_factory(self):
         """Test histogram factory method."""
         registry = MetricsRegistry(namespace="test")
-        hist = registry.histogram("duration", "Request duration")
+        registry.histogram("duration", "Request duration")
 
         assert "test_duration" in registry._metrics
 

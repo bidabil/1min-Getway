@@ -418,7 +418,9 @@ async def _handle_non_streaming(
         api_circuit_breaker.record_failure()
         status_code = e.response.status_code if e.response else 500
         error_payload, status = get_error_response(status_code)
-        raise HTTPException(status_code=status, detail={"success": False, "error": error_payload})
+        raise HTTPException(
+            status_code=status, detail={"success": False, "error": error_payload}
+        ) from None
     except httpx.TimeoutException as e:
         api_circuit_breaker.record_failure()
         logger.error(f"TIMEOUT | Appel API 1min.ai: {str(e)}")
@@ -428,7 +430,7 @@ async def _handle_non_streaming(
                 "success": False,
                 "error": {"code": "TIMEOUT", "message": "API request timed out"},
             },
-        )
+        ) from None
     except httpx.ConnectError as e:
         api_circuit_breaker.record_failure()
         logger.error(f"CONNECTION_ERROR | API 1min.ai: {str(e)}")
@@ -438,7 +440,7 @@ async def _handle_non_streaming(
                 "success": False,
                 "error": {"code": "SERVICE_UNAVAILABLE", "message": "Unable to connect to API"},
             },
-        )
+        ) from None
     except Exception as e:
         api_circuit_breaker.record_failure()
         logger.error(f"UNEXPECTED_ERROR | {type(e).__name__}: {str(e)}")
@@ -448,7 +450,7 @@ async def _handle_non_streaming(
                 "success": False,
                 "error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"},
             },
-        )
+        ) from None
 
 
 async def _handle_streaming(

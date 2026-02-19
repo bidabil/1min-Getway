@@ -447,7 +447,7 @@ class TestWebhookManager:
         manager = WebhookManager(max_history=5)
 
         # Add more than max_history records
-        for i in range(10):
+        for _ in range(10):
             manager._delivery_history.append(
                 WebhookDelivery(
                     webhook_url="https://example.com",

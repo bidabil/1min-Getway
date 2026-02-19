@@ -587,7 +587,7 @@ class TestPerformHealthCheck:
             status=HealthStatus.HEALTHY,
         )
 
-        result = perform_health_check(include_api=False, include_memcached=False)
+        perform_health_check(include_api=False, include_memcached=False)
 
         # Memcached should not be called
         mock_memcached.assert_not_called()

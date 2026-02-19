@@ -434,7 +434,7 @@ class TestRequestLogger:
         mock_logger = MagicMock(spec=StructuredLogger)
         mock_logger._logger = MagicMock()
 
-        with RequestLogger(mock_logger, "test") as req_log:
+        with RequestLogger(mock_logger, "test"):
             time.sleep(0.01)  # 10ms
 
         info_call = mock_logger.info.call_args
