@@ -33,7 +33,7 @@ def _sanitize_for_log(value: Any) -> str:
         value = repr(value)
 
     # Remove characters that can break log formatting
-    sanitized = value.replace("\r", "").replace("\n", "").replace("\t", " ")
+    sanitized: str = value.replace("\r", "").replace("\n", "").replace("\t", " ")
 
     # Limit length to avoid excessively large log entries
     max_length = 500

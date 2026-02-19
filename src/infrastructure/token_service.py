@@ -27,7 +27,7 @@ def _sanitize_for_log(value: Any) -> str:
         value = repr(value)
 
     # Remove characters that can break log formatting
-    sanitized = value.replace("\r", "").replace("\n", "").replace("\t", " ")
+    sanitized: str = value.replace("\r", "").replace("\n", "").replace("\t", " ")
 
     # Limit length to avoid excessively large log entries
     max_length = 100
@@ -63,7 +63,7 @@ def calculate_token(sentence: str, model: str = "gpt-4o") -> int:
             # Claude models use a different tokenizer
             # Approximation: 1 token ≈ 3.5 characters for Claude
             token_count = max(1, len(text) // 3)
-            logger.debug("TOKEN | Claude model %s: %d tokens", safe_model, token_count)
+            logger.debug("TKN | Claude model %s: %d tokens", safe_model, token_count)
             return token_count
 
         # --- MISTRAL FAMILY ---
@@ -78,10 +78,10 @@ def calculate_token(sentence: str, model: str = "gpt-4o") -> int:
                     )
                 )
                 token_count = len(tokenized.tokens)
-                logger.debug("TOKEN | Mistral model %s: %d tokens", safe_model, token_count)
+                logger.debug("TKN | Mistral model %s: %d tokens", safe_model, token_count)
                 return token_count
             except Exception as e:
-                logger.warning("TOKEN | Fallback for Mistral: %s", _sanitize_for_log(str(e)))
+                logger.warning("TKN | Fallback for Mistral: %s", _sanitize_for_log(str(e)))
                 # Fallback to cl100k_base
                 encoding = tiktoken.get_encoding("cl100k_base")
                 return len(encoding.encode(text))
@@ -95,12 +95,10 @@ def calculate_token(sentence: str, model: str = "gpt-4o") -> int:
             encoding = tiktoken.get_encoding("cl100k_base")
 
         token_count = len(encoding.encode(text))
-        logger.debug("TOKEN | %s: %d tokens", safe_model, token_count)
+        logger.debug("TKN | %s: %d tokens", safe_model, token_count)
         return token_count
 
     except Exception as e:
-        logger.error(
-            "TOKEN | Error for %s: %s", _sanitize_for_log(model), _sanitize_for_log(str(e))
-        )
+        logger.error("TKN | Error for %s: %s", _sanitize_for_log(model), _sanitize_for_log(str(e)))
         # Safe fallback: standard OpenAI approximation
         return max(1, len(text) // 4)
