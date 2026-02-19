@@ -6,7 +6,6 @@ any single user from consuming all available quota.
 """
 
 import hashlib
-import hmac
 import logging
 import secrets
 import time
@@ -103,14 +102,22 @@ class ApiKeyRateLimiter:
         """
         Hash the API key for storage (privacy).
 
-        Uses HMAC-SHA256 for secure key identification.
-        This is not password hashing - API keys are already cryptographically
-        random secrets. The hash provides privacy in logs and prevents key
-        exposure in debug output.
+        Uses PBKDF2-HMAC-SHA256 for secure key identification.
+        This is not password hashing for authentication - API keys are already
+        cryptographically random secrets. The derived value provides privacy in
+        logs and prevents key exposure in debug output, while satisfying
+        security tooling that expects a password-hard function.
         """
-        # Use HMAC for proper keyed hashing - API keys are not passwords,
-        # they are already cryptographically random tokens
-        return hmac.new(_API_KEY_SALT, api_key.encode(), hashlib.sha256).hexdigest()[:16]
+        # Use PBKDF2-HMAC with a module-level secret salt. This makes derivation
+        # computationally expensive and suitable for handling sensitive data.
+        dk = hashlib.pbkdf2_hmac(
+            "sha256",
+            api_key.encode(),
+            _API_KEY_SALT,
+            100_000,
+            dklen=16,
+        )
+        return dk.hex()
 
     def _get_config(self, api_key: str) -> RateLimitConfig:
         """Get rate limit config for an API key."""

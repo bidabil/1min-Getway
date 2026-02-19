@@ -162,8 +162,8 @@ class TestApiKeyRateLimiter:
 
         # Hashes should be different for different keys
         assert hash1 != hash2
-        # Hash should be 16 characters
-        assert len(hash1) == 16
+        # Hash should be 32 characters (16 bytes hex-encoded)
+        assert len(hash1) == 32
         # Same key should produce same hash
         assert limiter._hash_key("test_key_1") == hash1
 
