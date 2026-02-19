@@ -20,15 +20,27 @@ import requests
 logger = logging.getLogger("1min-gateway.webhooks")
 
 
-def _sanitize_for_log(value: Any) -> Any:
+def _sanitize_for_log(value: Any) -> str:
     """
     Sanitize a value before logging to reduce risk of log injection.
 
-    Removes CR and LF characters from strings; non-strings are returned unchanged.
+    - Ensures the returned value is always a string.
+    - Removes CR, LF and TAB characters to prevent log injection via newlines.
+    - Truncates overly long values to avoid log flooding.
     """
-    if isinstance(value, str):
-        return value.replace("\r", "").replace("\n", "")
-    return value
+    # Convert non-string values to a safe string representation
+    if not isinstance(value, str):
+        value = repr(value)
+
+    # Remove characters that can break log formatting
+    sanitized = value.replace("\r", "").replace("\n", "").replace("\t", " ")
+
+    # Limit length to avoid excessively large log entries
+    max_length = 500
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length] + "…"
+
+    return sanitized
 
 
 class WebhookEvent(str, Enum):
@@ -158,7 +170,7 @@ class WebhookManager:
         self._webhooks[name] = config
         safe_name = _sanitize_for_log(name)
         safe_url = _sanitize_for_log(url)
-        logger.info(f"Webhook registered: {safe_name} -> {safe_url}")
+        logger.info("Webhook registered: name=%s url=%s", safe_name, safe_url)
 
     def unregister(self, name: str) -> bool:
         """
@@ -173,7 +185,7 @@ class WebhookManager:
         if name in self._webhooks:
             del self._webhooks[name]
             safe_name = _sanitize_for_log(name)
-            logger.info(f"Webhook unregistered: {safe_name}")
+            logger.info("Webhook unregistered: name=%s", safe_name)
             return True
         return False
 

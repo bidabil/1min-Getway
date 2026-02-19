@@ -6,6 +6,7 @@ any single user from consuming all available quota.
 """
 
 import hashlib
+import hmac
 import logging
 import secrets
 import time
@@ -16,7 +17,7 @@ logger = logging.getLogger("1min-gateway.rate-limiter")
 
 # Salt for hashing API keys (generated once at module load)
 # This prevents rainbow table attacks on the hashed API keys
-_API_KEY_SALT = secrets.token_hex(16)
+_API_KEY_SALT = secrets.token_bytes(32)
 
 
 @dataclass
@@ -102,11 +103,14 @@ class ApiKeyRateLimiter:
         """
         Hash the API key for storage (privacy).
 
-        Uses HMAC-SHA256 with a salt for secure key identification.
-        This is not password hashing - API keys are already secrets.
-        The hash provides privacy in logs and prevents key exposure in debug output.
+        Uses HMAC-SHA256 for secure key identification.
+        This is not password hashing - API keys are already cryptographically
+        random secrets. The hash provides privacy in logs and prevents key
+        exposure in debug output.
         """
-        return hashlib.sha256(f"{_API_KEY_SALT}:{api_key}".encode()).hexdigest()[:16]
+        # Use HMAC for proper keyed hashing - API keys are not passwords,
+        # they are already cryptographically random tokens
+        return hmac.new(_API_KEY_SALT, api_key.encode(), hashlib.sha256).hexdigest()[:16]
 
     def _get_config(self, api_key: str) -> RateLimitConfig:
         """Get rate limit config for an API key."""
