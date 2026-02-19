@@ -58,7 +58,7 @@ class TestWebhookConfig:
             events=[WebhookEvent.REQUEST_COMPLETED],
         )
         assert config.url == "https://example.com/webhook"
-        assert config.secret == "my-secret"
+        assert config.secret == "test-secret-value"  # pragma: allowlist secret
         assert config.events == [WebhookEvent.REQUEST_COMPLETED]
         assert config.enabled is True
         assert config.timeout == 10
@@ -120,7 +120,7 @@ class TestWebhookPayload:
             data={"key": "value"},
         )
 
-        signature = payload.compute_signature("my-secret")
+        signature = payload.compute_signature("my-secret")  # pragma: allowlist secret
 
         # Verify signature format (hex string)
         assert isinstance(signature, str)
@@ -134,7 +134,7 @@ class TestWebhookPayload:
             data={"key": "value"},
         )
 
-        secret = "my-secret"
+        secret = "my-secret"  # pragma: allowlist secret
         signature = payload.compute_signature(secret)
 
         # Verify manually
@@ -213,7 +213,7 @@ class TestWebhookManager:
         manager.register(
             name="test_webhook",
             url="https://example.com/webhook",
-            secret="secret",
+            secret="secret",  # pragma: allowlist secret
             events=[WebhookEvent.REQUEST_COMPLETED],
         )
 
@@ -226,7 +226,7 @@ class TestWebhookManager:
         manager.register(
             name="test_webhook",
             url="https://example.com/webhook",
-            secret="secret",
+            secret="secret",  # pragma: allowlist secret
             events=None,  # All events
         )
 
@@ -235,7 +235,7 @@ class TestWebhookManager:
     def test_unregister_webhook(self):
         """Test unregistering a webhook."""
         manager = WebhookManager()
-        manager.register("test", "https://example.com", "secret")
+        manager.register("test", "https://example.com", "secret")  # pragma: allowlist secret
 
         result = manager.unregister("test")
 
@@ -251,7 +251,7 @@ class TestWebhookManager:
     def test_enable_webhook(self):
         """Test enabling a webhook."""
         manager = WebhookManager()
-        manager.register("test", "https://example.com", "secret")
+        manager.register("test", "https://example.com", "secret")  # pragma: allowlist secret
         manager._webhooks["test"].enabled = False
 
         result = manager.enable("test")
@@ -268,7 +268,7 @@ class TestWebhookManager:
     def test_disable_webhook(self):
         """Test disabling a webhook."""
         manager = WebhookManager()
-        manager.register("test", "https://example.com", "secret")
+        manager.register("test", "https://example.com", "secret")  # pragma: allowlist secret
 
         result = manager.disable("test")
 
@@ -284,8 +284,8 @@ class TestWebhookManager:
     def test_get_stats(self):
         """Test getting webhook statistics."""
         manager = WebhookManager()
-        manager.register("test1", "https://example1.com", "secret")
-        manager.register("test2", "https://example2.com", "secret")
+        manager.register("test1", "https://example1.com", "secret")  # pragma: allowlist secret
+        manager.register("test2", "https://example2.com", "secret")  # pragma: allowlist secret
         manager.disable("test2")
 
         stats = manager.get_stats()
@@ -300,7 +300,7 @@ class TestWebhookManager:
         manager.register(
             "test1",
             "https://example1.com",
-            "secret",
+            "secret",  # pragma: allowlist secret
             events=[WebhookEvent.REQUEST_COMPLETED],
         )
 
@@ -329,7 +329,7 @@ class TestWebhookManager:
         manager.register(
             "test",
             "https://example.com/webhook",
-            "secret",
+            "secret",  # pragma: allowlist secret
             events=[WebhookEvent.REQUEST_COMPLETED],
         )
 
@@ -349,7 +349,7 @@ class TestWebhookManager:
         manager.register(
             "test",
             "https://example.com/webhook",
-            "secret",
+            "secret",  # pragma: allowlist secret
             events=[WebhookEvent.REQUEST_COMPLETED],
         )
         manager.disable("test")
@@ -366,7 +366,7 @@ class TestWebhookManager:
         manager.register(
             "test",
             "https://example.com/webhook",
-            "secret",
+            "secret",  # pragma: allowlist secret
             events=[WebhookEvent.REQUEST_COMPLETED],  # Only this event
         )
 
@@ -384,7 +384,7 @@ class TestWebhookManager:
         manager.register(
             "test",
             "https://example.com/webhook",
-            "secret",
+            "secret",  # pragma: allowlist secret
             events=[WebhookEvent.REQUEST_COMPLETED],
             max_retries=0,  # No retries for faster test
         )
@@ -406,7 +406,7 @@ class TestWebhookManager:
         manager.register(
             "test",
             "https://example.com/webhook",
-            "secret",
+            "secret",  # pragma: allowlist secret
             events=[WebhookEvent.REQUEST_COMPLETED],
             max_retries=0,
         )
@@ -429,7 +429,7 @@ class TestWebhookManager:
         manager.register(
             "test",
             "https://example.com/webhook",
-            "secret",
+            "secret",  # pragma: allowlist secret
             events=[WebhookEvent.REQUEST_COMPLETED],
         )
 
