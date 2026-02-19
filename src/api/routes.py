@@ -539,7 +539,9 @@ async def _handle_streaming(
                 "choices": [
                     {
                         "index": 0,
-                        "delta": {"content": f"\n\n[Error: {str(e)}]"},
+                        "delta": {
+                            "content": "\n\n[Error: An internal error occurred while processing the stream.]"
+                        },
                         "finish_reason": "error",
                     }
                 ],
@@ -619,6 +621,8 @@ def _transform_response(
         }
     except Exception as e:
         logger.error(f"ADAPTER | Erreur transformation: {str(e)}")
+        # Ne pas exposer les détails de l'exception au client.
+        # Un message générique est renvoyé, tandis que les détails sont conservés dans les logs.
         return {
             "id": f"chatcmpl-{uuid.uuid4()}",
             "object": "chat.completion",
@@ -627,7 +631,7 @@ def _transform_response(
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": f"Error: {str(e)}"},
+                    "message": {"role": "assistant", "content": "Error: Internal adapter error."},
                     "finish_reason": "stop",
                 }
             ],

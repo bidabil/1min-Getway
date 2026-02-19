@@ -382,9 +382,12 @@ class TestRequestLogger:
         mock_logger = MagicMock(spec=StructuredLogger)
         mock_logger._logger = MagicMock()
 
-        with pytest.raises(ValueError):
+        def _run():
             with RequestLogger(mock_logger, "POST /v1/chat", "req-123"):
                 raise ValueError("Test error")
+
+        with pytest.raises(ValueError):
+            _run()
 
         # Should log error on failure
         mock_logger.error.assert_called()

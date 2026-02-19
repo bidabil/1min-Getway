@@ -20,6 +20,17 @@ import requests
 logger = logging.getLogger("1min-gateway.webhooks")
 
 
+def _sanitize_for_log(value: Any) -> Any:
+    """
+    Sanitize a value before logging to reduce risk of log injection.
+
+    Removes CR and LF characters from strings; non-strings are returned unchanged.
+    """
+    if isinstance(value, str):
+        return value.replace("\r", "").replace("\n", "")
+    return value
+
+
 class WebhookEvent(str, Enum):
     """Types of webhook events."""
 
@@ -145,7 +156,9 @@ class WebhookManager:
             retry_delay=kwargs.get("retry_delay", 5),
         )
         self._webhooks[name] = config
-        logger.info(f"Webhook registered: {name} -> {url}")
+        safe_name = _sanitize_for_log(name)
+        safe_url = _sanitize_for_log(url)
+        logger.info(f"Webhook registered: {safe_name} -> {safe_url}")
 
     def unregister(self, name: str) -> bool:
         """
@@ -159,7 +172,8 @@ class WebhookManager:
         """
         if name in self._webhooks:
             del self._webhooks[name]
-            logger.info(f"Webhook unregistered: {name}")
+            safe_name = _sanitize_for_log(name)
+            logger.info(f"Webhook unregistered: {safe_name}")
             return True
         return False
 
