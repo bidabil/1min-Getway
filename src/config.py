@@ -85,7 +85,12 @@ LOG_FILE: Final[str] = os.getenv("LOG_FILE", "/app/logs/gateway.log")
 # SÉCURITÉ
 # ============================================================================
 SECRET_KEY: Final[str] = os.getenv("SECRET_KEY", "CHANGE_ME_IN_PRODUCTION")
-CORS_ORIGINS: Final[str] = os.getenv("CORS_ORIGINS", "*")
+# Default to empty string for security - must be explicitly configured
+# Use CORS_ORIGINS="*" only for development, never in production
+CORS_ORIGINS: Final[str] = os.getenv("CORS_ORIGINS", "")
+
+# Mode de validation API Key: "fast" (format only) ou "full" (avec vérification API)
+API_KEY_VALIDATION_MODE: Final[str] = os.getenv("API_KEY_VALIDATION_MODE", "fast")
 
 
 # ============================================================================
@@ -105,6 +110,18 @@ def validate_config() -> None:
             errors.append("❌ SECRET_KEY doit être changée en production")
         if DEBUG:
             logger.warning("⚠️ DEBUG=True en production - Non recommandé")
+        if CORS_ORIGINS == "*":
+            logger.warning(
+                "⚠️ CORS_ORIGINS='*' en production - "
+                "Cela permet l'accès depuis n'importe quelle origine. "
+                "Définissez CORS_ORIGINS avec les domaines autorisés."
+            )
+        if not CORS_ORIGINS:
+            logger.warning(
+                "⚠️ CORS_ORIGINS non configuré - "
+                "Les requêtes CORS seront bloquées. "
+                "Définissez CORS_ORIGINS avec les domaines autorisés."
+            )
 
     # Vérification des modèles
     if not AVAILABLE_MODELS:
