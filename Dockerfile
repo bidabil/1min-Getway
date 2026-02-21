@@ -33,6 +33,7 @@ WORKDIR /app
 # Security updates for base image vulnerabilities
 # Pending CVEs (no fix available yet in Debian):
 # - CVE-2026-0861 (glibc): HIGH - memalign integer overflow. Low risk (no direct memalign usage)
+# - CVE-2026-0915 (glibc): MEDIUM - getnetbyaddr stack leak. Low risk (no getnetbyaddr usage)
 # - CVE-2026-27171 (zlib): MEDIUM - CRC32 infinite loop DoS. Low risk (no CRC32 combine usage)
 # - CVE-2025-14104 (util-linux): MEDIUM - setpwnam heap overread. Low risk (no SUID login-utils)
 # - CVE-2025-7709 (sqlite3): MEDIUM - FTS5 integer overflow. Low risk (no FTS5 usage)
