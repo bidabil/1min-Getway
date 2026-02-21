@@ -31,10 +31,10 @@ ENV PATH=/home/appuser/.local/bin:$PATH
 WORKDIR /app
 
 # Security updates for base image vulnerabilities
-# Note: CVE-2026-0861 (glibc memalign) has no fix available yet in Debian.
+# Pending CVEs (no fix available yet in Debian):
+# - CVE-2026-0861 (glibc): HIGH - memalign integer overflow. Low risk for us (no direct memalign usage)
+# - CVE-2026-27171 (zlib): MEDIUM - CRC32 infinite loop DoS. Low risk for us (no CRC32 combine usage)
 # This upgrade ensures we get security patches as soon as they're released.
-# Risk assessment: Low - requires specific conditions to exploit (attacker-controlled
-# size AND alignment arguments to memalign). Our application doesn't use memalign directly.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
