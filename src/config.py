@@ -70,7 +70,7 @@ AVAILABLE_MODELS: Final[list[str]] = (
 # ============================================================================
 RATELIMIT_ENABLED: Final[bool] = os.getenv("RATELIMIT_ENABLED", "True").lower() == "true"
 RATELIMIT_STORAGE_URL: Final[str] = os.getenv(
-    "RATELIMIT_STORAGE_URL", f"memcache://{MEMCACHED_HOST}:{MEMCACHED_PORT}"
+    "RATELIMIT_STORAGE_URL", f"memcached://{MEMCACHED_HOST}:{MEMCACHED_PORT}"
 )
 RATELIMIT_DEFAULT: Final[str] = os.getenv("RATELIMIT_DEFAULT", "180 per minute")
 RATELIMIT_MODELS_LIST: Final[str] = os.getenv("RATELIMIT_MODELS_LIST", "180 per minute")
