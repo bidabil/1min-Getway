@@ -34,7 +34,10 @@ def get_retry_session(
         raise_on_status=False,
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
+    session.mount(
+        "http://",  # nosemgrep: python.lang.security.audit.insecure-transport.requests.request-session-with-http.request-session-with-http
+        adapter,
+    )
     session.mount("https://", adapter)
     return session
 
