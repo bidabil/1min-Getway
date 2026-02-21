@@ -31,12 +31,19 @@ ENV PATH=/home/appuser/.local/bin:$PATH
 WORKDIR /app
 
 # Security updates for base image vulnerabilities
-# Note: CVE-2026-0861 (glibc memalign) has no fix available yet in Debian.
+# Pending CVEs (no fix available yet in Debian):
+# - CVE-2026-0861 (glibc): HIGH - memalign integer overflow. Low risk (no direct memalign usage)
+# - CVE-2026-0915 (glibc): MEDIUM - getnetbyaddr stack leak. Low risk (no getnetbyaddr usage)
+# - CVE-2025-15281 (glibc): MEDIUM - wordexp uninitialized memory. Low risk (no wordexp usage)
+# - CVE-2026-27171 (zlib): MEDIUM - CRC32 infinite loop DoS. Low risk (no CRC32 combine usage)
+# - CVE-2025-14104 (util-linux): MEDIUM - setpwnam heap overread. Low risk (no SUID login-utils)
+# - CVE-2025-7709 (sqlite3): MEDIUM - FTS5 integer overflow. Low risk (no FTS5 usage)
 # This upgrade ensures we get security patches as soon as they're released.
-# Risk assessment: Low - requires specific conditions to exploit (attacker-controlled
-# size AND alignment arguments to memalign). Our application doesn't use memalign directly.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip to fix CVE-2025-8869 (symlink extraction vulnerability)
+RUN pip install --upgrade pip>=25.3
 
 # Créer un utilisateur non-root AVANT de copier les fichiers
 RUN useradd --create-home --shell /bin/bash appuser
