@@ -669,6 +669,14 @@ jobs:
             COMMIT=${{ needs.init.outputs.sha_short }}
 
       # Les étapes suivantes seulement si on a push (pas en PR)
+      - name: Generate SBOM
+        if: github.event_name != 'pull_request'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
       - name: Generate SBOM Attestation
         if: github.event_name != 'pull_request'
         uses: actions/attest-sbom@v3
