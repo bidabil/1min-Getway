@@ -30,6 +30,14 @@ ENV PATH=/home/appuser/.local/bin:$PATH
 
 WORKDIR /app
 
+# Security updates for base image vulnerabilities
+# Note: CVE-2026-0861 (glibc memalign) has no fix available yet in Debian.
+# This upgrade ensures we get security patches as soon as they're released.
+# Risk assessment: Low - requires specific conditions to exploit (attacker-controlled
+# size AND alignment arguments to memalign). Our application doesn't use memalign directly.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # Créer un utilisateur non-root AVANT de copier les fichiers
 RUN useradd --create-home --shell /bin/bash appuser
 
