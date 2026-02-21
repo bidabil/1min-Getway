@@ -671,7 +671,7 @@ jobs:
       # Les étapes suivantes seulement si on a push (pas en PR)
       - name: Generate SBOM Attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-sbom@v2
+        uses: actions/attest-sbom@v3
         with:
           subject-name: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}
