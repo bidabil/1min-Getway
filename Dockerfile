@@ -54,8 +54,9 @@ COPY --from=builder /root/.local /home/appuser/.local
 # Copier le code source avec les bonnes permissions
 COPY --chown=appuser:appuser . .
 
-# Créer le dossier de logs
-RUN mkdir -p logs && chown -R appuser:appuser logs
+# Créer le dossier de logs avec permissions pour les volumes montés
+# Utilise 777 pour permettre l'écriture même si le volume est monté avec différents UID
+RUN mkdir -p logs && chmod 777 logs
 
 # Passer à l'utilisateur non-root
 USER appuser
