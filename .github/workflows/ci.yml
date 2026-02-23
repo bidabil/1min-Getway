@@ -697,7 +697,7 @@ jobs:
 
       - name: Install Cosign
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v3.8.0
+        uses: sigstore/cosign-installer@v4.0.0
 
       - name: Sign Images (Keyless)
         if: github.event_name != 'pull_request'
