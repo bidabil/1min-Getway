@@ -33,7 +33,7 @@ pymemcache==4.0.0
 coloredlogs==15.0.1
 
 # --- Environment ---
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 
 # ============================================================
 # DEV DEPENDENCIES (install avec: pip install -r requirements-dev.txt)
