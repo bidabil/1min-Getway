@@ -689,7 +689,7 @@ jobs:
 
       - name: Generate Build Attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}
