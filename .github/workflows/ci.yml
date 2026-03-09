@@ -576,7 +576,7 @@ jobs:
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Login seulement si on va push (pas en PR)
       - name: Login to Docker Hub
