@@ -21,10 +21,6 @@ on:
         description: "Skip staging validation check (emergency only)"
         type: boolean
         default: false
-      debug_enabled:
-        description: "Enable debug mode"
-        type: boolean
-        default: false
 
 concurrency:
   group: cd-production-${{ github.workflow }}
@@ -50,7 +46,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.resolve.outputs.version }}
-      image_tag: ${{ steps.resolve.outputs.image_tag }}
       image_ref: ${{ steps.resolve.outputs.image_ref }}
     steps:
       - name: Checkout
@@ -92,14 +87,11 @@ jobs:
           # Déterminer le tag d'image
           if [[ "$INPUT_VERSION" == "latest" ]]; then
             IMAGE_TAG="latest"
-          elif [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            IMAGE_TAG="$VERSION"
           else
             IMAGE_TAG="$VERSION"
           fi
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "image_ref=${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
           echo "**Resolved Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
@@ -387,27 +379,21 @@ jobs:
           if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "message=Production deployment successful - all smoke tests passed" >> $GITHUB_OUTPUT
-            echo "color=#36a64f" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.deploy-production.result }}" == "success" && "${{ needs.smoke-test.result }}" == "skipped" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "message=Production deployment completed (smoke tests skipped)" >> $GITHUB_OUTPUT
-            echo "color=#ffc107" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.validate.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
             echo "message=Validation failed - deployment cancelled" >> $GITHUB_OUTPUT
-            echo "color=#dc3545" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.staging-check.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
             echo "message=Staging validation failed - deployment cancelled" >> $GITHUB_OUTPUT
-            echo "color=#dc3545" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.smoke-test.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
             echo "message=Production deployment failed - smoke tests failed" >> $GITHUB_OUTPUT
-            echo "color=#dc3545" >> $GITHUB_OUTPUT
           else
             echo "status=unknown" >> $GITHUB_OUTPUT
             echo "message=Production deployment pipeline completed" >> $GITHUB_OUTPUT
-            echo "color=#6c757d" >> $GITHUB_OUTPUT
           fi
 
       - name: Deployment Report

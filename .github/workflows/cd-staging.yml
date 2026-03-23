@@ -10,11 +10,6 @@ name: CD - Staging
 
 on:
   workflow_dispatch:
-    inputs:
-      debug_enabled:
-        description: "Enable debug mode"
-        type: boolean
-        default: false
   push:
     branches: ["main"]
     paths-ignore:
@@ -107,7 +102,6 @@ jobs:
       packages: read
     outputs:
       deployed: ${{ steps.deploy.outputs.deployed }}
-      image_digest: ${{ steps.deploy.outputs.image_digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -150,7 +144,6 @@ jobs:
           # kubectl rollout status deployment/1min-gateway -n staging --timeout=300s
 
           echo "deployed=true" >> $GITHUB_OUTPUT
-          echo "image_digest=${{ steps.image.outputs.digest }}" >> $GITHUB_OUTPUT
 
           echo "Staging deployment triggered" >> $GITHUB_STEP_SUMMARY
 
@@ -283,19 +276,15 @@ jobs:
           if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "message=Staging deployment successful - smoke tests passed" >> $GITHUB_OUTPUT
-            echo "color=#36a64f" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.deploy-staging.result }}" == "success" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "message=Staging deployment successful (smoke tests skipped/inconclusive)" >> $GITHUB_OUTPUT
-            echo "color=#ffc107" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.ci.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
             echo "message=CI failed - staging deployment cancelled" >> $GITHUB_OUTPUT
-            echo "color=#dc3545" >> $GITHUB_OUTPUT
           else
             echo "status=failure" >> $GITHUB_OUTPUT
             echo "message=Staging deployment failed" >> $GITHUB_OUTPUT
-            echo "color=#dc3545" >> $GITHUB_OUTPUT
           fi
 
       - name: Deployment Report

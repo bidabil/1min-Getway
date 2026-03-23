@@ -23,17 +23,11 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      is-dependabot: ${{ steps.check.outputs.is-dependabot }}
       update-type: ${{ steps.metadata.outputs.update-type }}
       dependency-type: ${{ steps.metadata.outputs.dependency-type }}
       dependency-names: ${{ steps.metadata.outputs.dependency-names }}
 
     steps:
-      - name: Check if PR is from Dependabot
-        id: check
-        run: |
-          echo "is-dependabot=true" >> $GITHUB_OUTPUT
-
       - name: Fetch Dependabot metadata
         id: metadata
         uses: dependabot/fetch-metadata@v2
@@ -53,9 +47,7 @@ jobs:
   auto-merge:
     needs: check-dependabot
     runs-on: ubuntu-latest
-    if: |
-      github.actor == 'dependabot[bot]' &&
-      needs.check-dependabot.outputs.is-dependabot == 'true'
+    if: github.actor == 'dependabot[bot]'
     permissions:
       contents: write
       pull-requests: write

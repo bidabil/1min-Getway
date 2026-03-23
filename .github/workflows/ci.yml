@@ -65,17 +65,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      sha_short:      ${{ steps.vars.outputs.sha_short }}
-      is_release:     ${{ steps.vars.outputs.is_release }}
-      is_main:        ${{ steps.vars.outputs.is_main }}
-      is_pr:          ${{ steps.vars.outputs.is_pr }}
-      is_draft:       ${{ steps.vars.outputs.is_draft }}
-      version:        ${{ steps.vars.outputs.version }}
-      changes_src:    ${{ steps.changes.outputs.src }}
-      changes_deps:   ${{ steps.changes.outputs.deps }}
-      changes_docker: ${{ steps.changes.outputs.docker }}
-      changes_ci:     ${{ steps.changes.outputs.ci }}
-      changes_tests:  ${{ steps.changes.outputs.tests }}
+      sha_short:     ${{ steps.vars.outputs.sha_short }}
+      is_pr:         ${{ steps.vars.outputs.is_pr }}
+      is_draft:      ${{ steps.vars.outputs.is_draft }}
+      version:       ${{ steps.vars.outputs.version }}
+      changes_src:   ${{ steps.changes.outputs.src }}
+      changes_deps:  ${{ steps.changes.outputs.deps }}
+      changes_ci:    ${{ steps.changes.outputs.ci }}
+      changes_tests: ${{ steps.changes.outputs.tests }}
     permissions:
       contents: read
       pull-requests: read
@@ -88,8 +85,6 @@ jobs:
         id: vars
         run: |
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "is_release=${{ startsWith(github.ref, 'refs/tags/v') }}" >> $GITHUB_OUTPUT
-          echo "is_main=${{ github.ref == 'refs/heads/main' }}" >> $GITHUB_OUTPUT
           echo "is_pr=${{ github.event_name == 'pull_request' }}" >> $GITHUB_OUTPUT
           echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
           if [[ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]]; then
@@ -114,10 +109,6 @@ jobs:
               - 'requirements*.txt'
               - 'pyproject.toml'
               - 'poetry.lock'
-            docker:
-              - 'Dockerfile'
-              - 'docker-compose*.yml'
-              - '.dockerignore'
             ci:
               - '.github/workflows/**'
               - '.github/actions/**'

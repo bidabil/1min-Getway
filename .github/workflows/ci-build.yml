@@ -23,14 +23,6 @@ on:
         description: "Original triggering event (pull_request, push, schedule...)"
         type: string
         required: true
-    outputs:
-      digest:
-        description: "Image digest"
-        value: ${{ jobs.build.outputs.digest }}
-      image_tags:
-        description: "Image tags"
-        value: ${{ jobs.build.outputs.image_tags }}
-
 env:
   REGISTRY_DOCKERHUB: docker.io
   REGISTRY_GHCR: ghcr.io
@@ -51,9 +43,6 @@ jobs:
       id-token: write
       security-events: write
       attestations: write
-    outputs:
-      digest:     ${{ steps.build.outputs.digest }}
-      image_tags: ${{ steps.meta.outputs.tags }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v4
