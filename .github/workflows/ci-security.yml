@@ -1,0 +1,198 @@
+# ==============================================================
+# CI Security - 1min-Gateway
+# ==============================================================
+# Scans de sécurité : SAST, OSV, dépendances, Scorecard.
+# Appelé depuis ci.yml (advisory — ne bloque pas le quality gate).
+# Peut aussi être déclenché directement par schedule.
+# ==============================================================
+
+name: CI - Security
+
+on:
+  workflow_call:
+    inputs:
+      is_draft:
+        description: "Is draft PR"
+        type: boolean
+        default: false
+      changes_src:
+        description: "Source files changed"
+        type: boolean
+        default: true
+      changes_deps:
+        description: "Dependency files changed"
+        type: boolean
+        default: true
+      is_pr:
+        description: "Is a pull request"
+        type: boolean
+        default: false
+      is_scheduled:
+        description: "Triggered by schedule"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 6 * * 1"   # Security scan every Monday 6 AM UTC
+    - cron: "0 0 1 * *"   # Monthly full scan
+
+env:
+  PYTHON_VERSION: "3.12"
+  RUFF_VERSION: "0.8.0"
+
+permissions:
+  contents: read
+
+jobs:
+  # ==============================================================
+  # SAST : Ruff Security Rules + Semgrep + CodeQL
+  # ==============================================================
+  security-sast:
+    name: "SAST Scan"
+    if: |
+      !inputs.is_draft &&
+      (inputs.changes_src || inputs.is_scheduled || github.event_name == 'schedule')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Ruff Security Rules
+        run: |
+          pip install ruff==${{ env.RUFF_VERSION }}
+          ruff check . --select S --output-format=github
+
+      - name: Semgrep Scan
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/python
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+
+      - name: CodeQL Initialize
+        uses: github/codeql-action/init@v4
+        with:
+          languages: python
+          queries: security-and-quality
+
+      - name: CodeQL Analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:python"
+
+  # ==============================================================
+  # OSV Scanner
+  # ==============================================================
+  osv-scan:
+    name: "OSV Scanner"
+    if: |
+      !inputs.is_draft &&
+      (inputs.changes_deps || inputs.is_scheduled || github.event_name == 'schedule')
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.3
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    with:
+      scan-args: |-
+        --recursive
+        ./
+
+  # ==============================================================
+  # Dependency Scan : pip-audit + safety
+  # ==============================================================
+  security-deps:
+    name: "Dependency Scan"
+    if: |
+      !inputs.is_draft &&
+      (inputs.changes_deps || inputs.is_scheduled || github.event_name == 'schedule')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - run: pip install -r requirements.txt pip-audit safety
+
+      - name: Pip Audit
+        run: |
+          pip-audit --format=json --output=pip-audit.json || true
+          pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Safety Scan
+        run: safety scan --output json > safety.json || true
+        continue-on-error: true
+
+      - name: Upload Security Results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: dependency-scan-results
+          path: |
+            pip-audit.json
+            safety.json
+          retention-days: 30
+
+  # ==============================================================
+  # Dependency Review (PRs uniquement)
+  # ==============================================================
+  dependency-review:
+    name: "Dependency Review"
+    if: inputs.is_pr || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-3.0, AGPL-3.0
+          comment-summary-in-pr: always
+
+  # ==============================================================
+  # OpenSSF Scorecard (schedule uniquement)
+  # ==============================================================
+  scorecard:
+    name: "OpenSSF Scorecard"
+    if: inputs.is_scheduled || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2.4.3
+        with:
+          results_file: scorecard.json
+          results_format: json
+          publish_results: true
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: scorecard-results
+          path: scorecard.json
+          retention-days: 30

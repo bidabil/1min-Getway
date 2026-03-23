@@ -13,8 +13,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   # ============================================================
@@ -23,6 +22,9 @@ jobs:
   check-dependabot:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       is-dependabot: ${{ steps.check.outputs.is-dependabot }}
       update-type: ${{ steps.metadata.outputs.update-type }}
@@ -57,6 +59,9 @@ jobs:
     if: |
       github.actor == 'dependabot[bot]' &&
       needs.check-dependabot.outputs.is-dependabot == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -79,12 +84,13 @@ jobs:
           echo "Test Status: ${{ steps.wait-for-tests.outputs.conclusion }}"
 
       # ============================================================
-      # RÈGLE 1 : Auto-merge des patchs de sécurité (toujours)
+      # RÈGLE 1 : Auto-merge des patchs de sécurité (dev deps uniquement)
       # ============================================================
       - name: Auto-approve security patches
         if: |
           steps.wait-for-tests.outputs.conclusion == 'success' &&
-          needs.check-dependabot.outputs.update-type == 'version-update:semver-patch'
+          needs.check-dependabot.outputs.update-type == 'version-update:semver-patch' &&
+          needs.check-dependabot.outputs.dependency-type != 'direct:production'
         run: |
           echo "Security patch detected - Auto-approving"
           gh pr review --approve "${{ github.event.pull_request.html_url }}"
