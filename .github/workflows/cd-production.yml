@@ -51,7 +51,7 @@ jobs:
     outputs:
       version: ${{ steps.resolve.outputs.version }}
       image_tag: ${{ steps.resolve.outputs.image_tag }}
-      image_digest: ${{ steps.resolve.outputs.image_digest }}
+      image_ref: ${{ steps.resolve.outputs.image_ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -100,7 +100,7 @@ jobs:
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-          echo "image_digest=${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "image_ref=${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
           echo "**Resolved Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Image**: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:$IMAGE_TAG" >> $GITHUB_STEP_SUMMARY
@@ -108,8 +108,8 @@ jobs:
       - name: Verify Image Exists
         run: |
           # Vérifier que l'image existe dans le registry
-          if ! docker manifest inspect ${{ steps.resolve.outputs.image_digest }} > /dev/null 2>&1; then
-            echo "Image not found: ${{ steps.resolve.outputs.image_digest }}" >> $GITHUB_STEP_SUMMARY
+          if ! docker manifest inspect ${{ steps.resolve.outputs.image_ref }} > /dev/null 2>&1; then
+            echo "Image not found: ${{ steps.resolve.outputs.image_ref }}" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
           echo "Image verified in registry" >> $GITHUB_STEP_SUMMARY
@@ -126,6 +126,13 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Validate environment URLs
+        run: |
+          if [[ -z "${{ env.STAGING_URL }}" ]]; then
+            echo "::error::STAGING_URL variable is not set. Configure it in Settings → Variables."
+            exit 1
+          fi
+
       - name: Check Staging Health
         run: |
           echo "## Staging Validation" >> $GITHUB_STEP_SUMMARY
@@ -194,7 +201,7 @@ jobs:
       - name: Deploy to Production
         id: deploy
         env:
-          IMAGE_DIGEST: ${{ needs.validate.outputs.image_digest }}
+          IMAGE_DIGEST: ${{ needs.validate.outputs.image_ref }}
           VERSION: ${{ needs.validate.outputs.version }}
           DEPLOYED_BY: ${{ github.actor }}
           SKIP_CHECK: ${{ github.event.inputs.skip_staging_check }}
@@ -222,7 +229,7 @@ jobs:
 
           # TODO: Ajouter ici la commande de déploiement réel
           # Exemple avec kubectl:
-          # kubectl set image deployment/1min-gateway app=${{ needs.validate.outputs.image_digest }} -n production
+          # kubectl set image deployment/1min-gateway app=${{ needs.validate.outputs.image_ref }} -n production
           # kubectl rollout status deployment/1min-gateway -n production --timeout=600s
 
           echo "deployed=true" >> $GITHUB_OUTPUT
@@ -241,8 +248,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Validate environment URLs
+        run: |
+          if [[ -z "${{ env.PRODUCTION_URL }}" ]]; then
+            echo "::error::PRODUCTION_URL variable is not set. Configure it in Settings → Variables."
+            exit 1
+          fi
 
       - name: Wait for deployment
         run: sleep 60  # Attendre plus longtemps pour production
@@ -351,7 +362,7 @@ jobs:
           echo "3. Notify the team immediately" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Deployed Version**: ${{ needs.validate.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Image**: ${{ needs.validate.outputs.image_digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image**: ${{ needs.validate.outputs.image_ref }}" >> $GITHUB_STEP_SUMMARY
 
           # TODO: Ajouter commande de rollback automatique si nécessaire
           # kubectl rollout undo deployment/1min-gateway -n production
@@ -416,7 +427,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Info" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ needs.validate.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image**: ${{ needs.validate.outputs.image_digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: ${{ needs.validate.outputs.image_ref }}" >> $GITHUB_STEP_SUMMARY
           echo "- **URL**: ${{ env.PRODUCTION_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered By**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY

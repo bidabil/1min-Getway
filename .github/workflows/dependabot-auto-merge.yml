@@ -1,11 +1,8 @@
-name: Dependabot Auto-Merge (Fixed)
+name: Dependabot Auto-Merge
 
 # ============================================================
 # Ce workflow automatise l'approbation et le merge des PRs Dependabot
-# selon des règles de sécurité strictes
-#
-# FIX: checkName changé de "build-and-push" à "test"
-# Raison: build-and-push est skippé sur les PRs Dependabot
+# selon des règles de sécurité strictes.
 # ============================================================
 
 on:
@@ -67,17 +64,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ============================================================
-      # FIX CRITIQUE: Attendre le Quality Gate qui agrège tous les résultats
-      # ============================================================
       - name: Wait for Quality Gate
-        uses: fountainhead/action-wait-for-check@v1.2.0
+        uses: lewagon/wait-on-check-action@v1.3.4
         id: wait-for-tests
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Quality Gate"  # CORRIGÉ: Attend le portail qualité global
           ref: ${{ github.event.pull_request.head.sha }}
-          timeoutSeconds: 1800  # 30 minutes max
+          check-name: "CI / Quality Gate"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 30
 
       - name: Test Status
         run: |

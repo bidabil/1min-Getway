@@ -166,8 +166,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Validate environment URLs
+        run: |
+          if [[ -z "${{ env.STAGING_URL }}" ]]; then
+            echo "::error::STAGING_URL variable is not set. Configure it in Settings → Variables."
+            exit 1
+          fi
 
       - name: Wait for deployment
         run: sleep 30

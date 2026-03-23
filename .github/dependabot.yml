@@ -1,6 +1,6 @@
 
 # ============================================================
-# Dependabot Configuration - Corrigé
+# Dependabot Configuration
 # ============================================================
 
 version: 2
@@ -23,8 +23,8 @@ updates:
     reviewers:
       - "billelattafi"
     commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
+      prefix: "chore"
+      prefix-development: "chore"
       include: "scope"
 
     # Groupes SANS chevauchement
@@ -85,7 +85,7 @@ updates:
     reviewers:
       - "billelattafi"
     commit-message:
-      prefix: "chore(ci)"
+      prefix: "chore"
       include: "scope"
     groups:
       github-actions-all:
@@ -112,7 +112,7 @@ updates:
     reviewers:
       - "billelattafi"
     commit-message:
-      prefix: "chore(docker)"
+      prefix: "chore"
       include: "scope"
     ignore:
       - dependency-name: "python"
