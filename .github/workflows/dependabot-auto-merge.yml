@@ -60,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ============================================================
       # FIX CRITIQUE: Attendre le Quality Gate qui agrège tous les résultats
