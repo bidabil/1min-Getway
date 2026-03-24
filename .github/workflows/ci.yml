@@ -679,7 +679,7 @@ jobs:
 
       - name: Generate SBOM Attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-sbom@v3
+        uses: actions/attest-sbom@v4
         with:
           subject-name: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}
