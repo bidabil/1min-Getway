@@ -382,7 +382,7 @@ jobs:
     if: |
       needs.init.outputs.is_draft != 'true' &&
       (needs.init.outputs.changes_deps == 'true' || github.event_name == 'schedule')
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.3
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.5
     permissions:
       contents: read
       security-events: write
@@ -697,7 +697,7 @@ jobs:
 
       - name: Install Cosign
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v4.1.0
+        uses: sigstore/cosign-installer@v4.1.1
 
       - name: Sign Images (Keyless)
         if: github.event_name != 'pull_request'
