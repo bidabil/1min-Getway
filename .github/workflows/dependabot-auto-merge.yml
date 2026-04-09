@@ -1,11 +1,8 @@
-name: Dependabot Auto-Merge (Fixed)
+name: Dependabot Auto-Merge
 
 # ============================================================
 # Ce workflow automatise l'approbation et le merge des PRs Dependabot
-# selon des règles de sécurité strictes
-#
-# FIX: checkName changé de "build-and-push" à "test"
-# Raison: build-and-push est skippé sur les PRs Dependabot
+# selon des règles de sécurité strictes.
 # ============================================================
 
 on:
@@ -13,8 +10,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   # ============================================================
@@ -23,18 +19,15 @@ jobs:
   check-dependabot:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
-      is-dependabot: ${{ steps.check.outputs.is-dependabot }}
       update-type: ${{ steps.metadata.outputs.update-type }}
       dependency-type: ${{ steps.metadata.outputs.dependency-type }}
       dependency-names: ${{ steps.metadata.outputs.dependency-names }}
 
     steps:
-      - name: Check if PR is from Dependabot
-        id: check
-        run: |
-          echo "is-dependabot=true" >> $GITHUB_OUTPUT
-
       - name: Fetch Dependabot metadata
         id: metadata
         uses: dependabot/fetch-metadata@v2
@@ -54,37 +47,36 @@ jobs:
   auto-merge:
     needs: check-dependabot
     runs-on: ubuntu-latest
-    if: |
-      github.actor == 'dependabot[bot]' &&
-      needs.check-dependabot.outputs.is-dependabot == 'true'
+    if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      # ============================================================
-      # FIX CRITIQUE: Attendre le Quality Gate qui agrège tous les résultats
-      # ============================================================
       - name: Wait for Quality Gate
-        uses: fountainhead/action-wait-for-check@v1.2.0
+        uses: lewagon/wait-on-check-action@v1.3.4
         id: wait-for-tests
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Quality Gate"  # CORRIGÉ: Attend le portail qualité global
           ref: ${{ github.event.pull_request.head.sha }}
-          timeoutSeconds: 1800  # 30 minutes max
+          check-name: "CI / Quality Gate"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 30
 
       - name: Test Status
         run: |
           echo "Test Status: ${{ steps.wait-for-tests.outputs.conclusion }}"
 
       # ============================================================
-      # RÈGLE 1 : Auto-merge des patchs de sécurité (toujours)
+      # RÈGLE 1 : Auto-merge des patchs de sécurité (dev deps uniquement)
       # ============================================================
       - name: Auto-approve security patches
         if: |
           steps.wait-for-tests.outputs.conclusion == 'success' &&
-          needs.check-dependabot.outputs.update-type == 'version-update:semver-patch'
+          needs.check-dependabot.outputs.update-type == 'version-update:semver-patch' &&
+          needs.check-dependabot.outputs.dependency-type != 'direct:production'
         run: |
           echo "Security patch detected - Auto-approving"
           gh pr review --approve "${{ github.event.pull_request.html_url }}"

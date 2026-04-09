@@ -1,0 +1,206 @@
+# ==============================================================
+# CI Build - 1min-Gateway
+# ==============================================================
+# Build Docker multi-arch, scan (Trivy + Grype), push GHCR + DockerHub,
+# SBOM, attestations et signature Cosign keyless.
+# Appelé depuis ci.yml après le quality gate.
+# ==============================================================
+
+name: CI - Build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to build (semver or dev)"
+        type: string
+        required: true
+      sha_short:
+        description: "Short commit SHA"
+        type: string
+        required: true
+      event_name:
+        description: "Original triggering event (pull_request, push, schedule...)"
+        type: string
+        required: true
+env:
+  REGISTRY_DOCKERHUB: docker.io
+  REGISTRY_GHCR: ghcr.io
+  IMAGE_NAME: billelattafi/1min-gateway
+  GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: "Build & Push"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      security-events: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Login to Docker Hub
+        if: inputs.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY_DOCKERHUB }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to GHCR
+        if: inputs.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}
+            ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable=${{ inputs.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}},value=${{ inputs.version }},enable=${{ inputs.event_name != 'pull_request' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }},enable=${{ inputs.event_name != 'pull_request' }}
+            type=semver,pattern={{major}},value=${{ inputs.version }},enable=${{ inputs.event_name != 'pull_request' }}
+            type=sha,prefix=,format=short
+            type=ref,event=pr
+          labels: |
+            org.opencontainers.image.title=1min-Gateway
+            org.opencontainers.image.description=Intelligent API Gateway for AI models
+            org.opencontainers.image.vendor=Billel Attafi
+            org.opencontainers.image.version=${{ inputs.version }}
+
+      # Build local pour les scans (pas de push)
+      - name: Build for scan
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:scan
+          cache-from: type=gha
+          build-args: |
+            VERSION=${{ inputs.version }}
+            COMMIT=${{ inputs.sha_short }}
+
+      - name: Trivy Scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan
+          format: "sarif"
+          output: "trivy.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: "trivy.sarif"
+
+      - name: Grype Scan
+        id: grype
+        uses: anchore/scan-action@v7
+        if: always()
+        with:
+          image: ${{ env.IMAGE_NAME }}:scan
+          fail-build: false
+          output-format: sarif
+          severity-cutoff: high
+
+      - name: Upload Grype SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+          category: grype
+
+      # Build final multi-arch + push (sauf PR)
+      - name: Build and Push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ inputs.event_name != 'pull_request' }}
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            VERSION=${{ inputs.version }}
+            COMMIT=${{ inputs.sha_short }}
+
+      # Étapes post-push uniquement hors PR
+      - name: Generate SBOM
+        if: inputs.event_name != 'pull_request'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Generate SBOM Attestation
+        if: inputs.event_name != 'pull_request'
+        uses: actions/attest-sbom@v4
+        with:
+          subject-name: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: "sbom.spdx.json"
+          push-to-registry: true
+        continue-on-error: true
+
+      - name: Generate Build Attestation
+        if: inputs.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Install Cosign
+        if: inputs.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v4.1.0
+
+      - name: Sign Images (Keyless)
+        if: inputs.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes "${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}@${DIGEST}"
+          cosign sign --yes "${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${DIGEST}"
+
+      - name: Verify Signature
+        if: inputs.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-identity-regexp="https://github.com/${{ github.repository }}/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            "${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${DIGEST}"
+
+      - name: Build Summary
+        run: |
+          echo "## Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "| Property  | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version   | ${{ inputs.version }} |"                                  >> $GITHUB_STEP_SUMMARY
+          echo "| Digest    | \`${{ steps.build.outputs.digest || 'N/A' }}\` |"         >> $GITHUB_STEP_SUMMARY
+          echo "| Platforms | linux/amd64, linux/arm64 |"                               >> $GITHUB_STEP_SUMMARY
+          echo "| Push      | ${{ inputs.event_name != 'pull_request' }} |"             >> $GITHUB_STEP_SUMMARY

@@ -10,11 +10,6 @@ name: CD - Staging
 
 on:
   workflow_dispatch:
-    inputs:
-      debug_enabled:
-        description: "Enable debug mode"
-        type: boolean
-        default: false
   push:
     branches: ["main"]
     paths-ignore:
@@ -31,7 +26,7 @@ concurrency:
 env:
   REGISTRY_GHCR: ghcr.io
   GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
-  STAGING_URL: https://staging.1min-gateway.example.com
+  STAGING_URL: ${{ vars.STAGING_URL }}
 
 permissions:
   contents: read
@@ -107,7 +102,6 @@ jobs:
       packages: read
     outputs:
       deployed: ${{ steps.deploy.outputs.deployed }}
-      image_digest: ${{ steps.deploy.outputs.image_digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -150,7 +144,6 @@ jobs:
           # kubectl rollout status deployment/1min-gateway -n staging --timeout=300s
 
           echo "deployed=true" >> $GITHUB_OUTPUT
-          echo "image_digest=${{ steps.image.outputs.digest }}" >> $GITHUB_OUTPUT
 
           echo "Staging deployment triggered" >> $GITHUB_STEP_SUMMARY
 
@@ -166,8 +159,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Validate environment URLs
+        run: |
+          if [[ -z "${{ env.STAGING_URL }}" ]]; then
+            echo "::error::STAGING_URL variable is not set. Configure it in Settings → Variables."
+            exit 1
+          fi
 
       - name: Wait for deployment
         run: sleep 30
@@ -179,38 +176,41 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "### Health Check" >> $GITHUB_STEP_SUMMARY
+          HEALTH_OK=false
           for i in {1..10}; do
             if curl -sf --max-time 10 "${{ env.STAGING_URL }}/health" > /dev/null 2>&1; then
               echo "Health endpoint: OK" >> $GITHUB_STEP_SUMMARY
-              echo "health_ok=true" >> $GITHUB_OUTPUT
+              HEALTH_OK=true
               break
             fi
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
 
-          if [[ "${{ steps.health.outputs.health_ok }}" != "true" ]]; then
+          if [[ "$HEALTH_OK" != "true" ]]; then
             echo "Health endpoint: FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "health_ok=false" >> $GITHUB_OUTPUT
           fi
+          echo "health_ok=$HEALTH_OK" >> $GITHUB_OUTPUT
         continue-on-error: true
 
       - name: Readiness Check
         id: ready
         run: |
           echo "### Readiness Check" >> $GITHUB_STEP_SUMMARY
+          READY_OK=false
           for i in {1..5}; do
             if curl -sf --max-time 10 "${{ env.STAGING_URL }}/ready" > /dev/null 2>&1; then
               echo "Readiness endpoint: OK" >> $GITHUB_STEP_SUMMARY
-              echo "ready_ok=true" >> $GITHUB_OUTPUT
+              READY_OK=true
               break
             fi
             sleep 5
           done
 
-          if [[ "${{ steps.ready.outputs.ready_ok }}" != "true" ]]; then
+          if [[ "$READY_OK" != "true" ]]; then
             echo "Readiness endpoint: Not available (may be expected)" >> $GITHUB_STEP_SUMMARY
           fi
+          echo "ready_ok=$READY_OK" >> $GITHUB_OUTPUT
         continue-on-error: true
 
       - name: API Version Check
@@ -276,19 +276,15 @@ jobs:
           if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "message=Staging deployment successful - smoke tests passed" >> $GITHUB_OUTPUT
-            echo "color=#36a64f" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.deploy-staging.result }}" == "success" ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "message=Staging deployment successful (smoke tests skipped/inconclusive)" >> $GITHUB_OUTPUT
-            echo "color=#ffc107" >> $GITHUB_OUTPUT
           elif [[ "${{ needs.ci.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
             echo "message=CI failed - staging deployment cancelled" >> $GITHUB_OUTPUT
-            echo "color=#dc3545" >> $GITHUB_OUTPUT
           else
             echo "status=failure" >> $GITHUB_OUTPUT
             echo "message=Staging deployment failed" >> $GITHUB_OUTPUT
-            echo "color=#dc3545" >> $GITHUB_OUTPUT
           fi
 
       - name: Deployment Report
