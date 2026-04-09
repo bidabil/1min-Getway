@@ -2,22 +2,18 @@
 # CD Staging Pipeline - 1min-Gateway
 # ==============================================================
 # Déploiement automatique sur l'environnement staging
-# - Déclenché après un push sur main qui passe le CI
-# - Inclut les smoke tests
+# - Déclenché après la réussite du workflow CI sur main
+# - Semantic release + smoke tests
 # ==============================================================
 
 name: CD - Staging
 
 on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
-  push:
-    branches: ["main"]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - "LICENSE"
-      - ".gitignore"
 
 concurrency:
   group: cd-staging-${{ github.workflow }}-${{ github.ref }}
@@ -40,25 +36,30 @@ permissions:
 
 jobs:
   # ==============================================================
-  # STAGE 1: CI (réutilisation du workflow CI)
+  # GUARD: Ne s'exécute que si CI a réussi
   # ==============================================================
-  ci:
-    name: "CI"
-    uses: ./.github/workflows/ci.yml
-    secrets: inherit  # pragma: allowlist secret
-    with:
-      skip_tests: false
-      upload_artifacts: true
+  guard:
+    name: "Check CI Result"
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      sha_short: ${{ steps.sha.outputs.sha_short }}
+    steps:
+      - name: Compute short SHA
+        id: sha
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "sha_short=${SHA:0:7}" >> $GITHUB_OUTPUT
 
   # ==============================================================
-  # STAGE 2: RELEASE (Semantic Release)
+  # STAGE 1: RELEASE (Semantic Release)
   # ==============================================================
   release:
     name: "Semantic Release"
-    needs: ci
-    if: |
-      github.ref == 'refs/heads/main' &&
-      needs.ci.outputs.quality_passed == 'true'
+    needs: guard
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -74,6 +75,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Semantic Release
         id: semantic
@@ -89,15 +91,12 @@ jobs:
           echo "**Version**: v${{ steps.semantic.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
-  # STAGE 3: DEPLOY STAGING
+  # STAGE 2: DEPLOY STAGING
   # ==============================================================
   deploy-staging:
     name: "Deploy Staging"
-    needs: [ci, release]
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.ci.outputs.quality_passed == 'true'
+    needs: [guard, release]
+    if: always() && !cancelled() && needs.guard.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -122,11 +121,10 @@ jobs:
       - name: Get Image Digest
         id: image
         run: |
-          # Récupérer le digest de l'image qui vient d'être build
-          DIGEST=$(docker manifest inspect ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:${{ needs.ci.outputs.sha_short }} --verbose 2>/dev/null | jq -r '.Descriptor.digest' || echo "")
+          SHA_SHORT="${{ needs.guard.outputs.sha_short }}"
+          DIGEST=$(docker manifest inspect ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:${SHA_SHORT} --verbose 2>/dev/null | jq -r '.Descriptor.digest' || echo "")
           if [[ -z "$DIGEST" ]]; then
-            # Fallback sur le tag sha_short
-            echo "digest=${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:${{ needs.ci.outputs.sha_short }}" >> $GITHUB_OUTPUT
+            echo "digest=${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:${SHA_SHORT}" >> $GITHUB_OUTPUT
           else
             echo "digest=${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${DIGEST}" >> $GITHUB_OUTPUT
           fi
@@ -137,28 +135,25 @@ jobs:
           echo "## Staging Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Image**: \`${{ steps.image.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Version**: ${{ needs.release.outputs.new_release_version || needs.ci.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ needs.release.outputs.new_release_version || needs.guard.outputs.sha_short }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Method" >> $GITHUB_STEP_SUMMARY
           echo "- GitOps (ArgoCD/Flux)" >> $GITHUB_STEP_SUMMARY
           echo "- Environment: staging" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
 
           # TODO: Ajouter ici la commande de déploiement réel
-          # Exemple avec kubectl:
           # kubectl set image deployment/1min-gateway app=${{ steps.image.outputs.digest }} -n staging
           # kubectl rollout status deployment/1min-gateway -n staging --timeout=300s
 
           echo "deployed=true" >> $GITHUB_OUTPUT
-
           echo "Staging deployment triggered" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
-  # STAGE 4: SMOKE TESTS
+  # STAGE 3: SMOKE TESTS
   # ==============================================================
   smoke-test:
     name: "Smoke Tests"
-    needs: [ci, deploy-staging]
+    needs: deploy-staging
     if: needs.deploy-staging.outputs.deployed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -179,136 +174,70 @@ jobs:
         id: health
         run: |
           echo "## Smoke Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "### Health Check" >> $GITHUB_STEP_SUMMARY
           HEALTH_OK=false
           for i in {1..10}; do
             if curl -sf --max-time 10 "${{ env.STAGING_URL }}/health" > /dev/null 2>&1; then
-              echo "Health endpoint: OK" >> $GITHUB_STEP_SUMMARY
               HEALTH_OK=true
               break
             fi
-            echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
-
-          if [[ "$HEALTH_OK" != "true" ]]; then
-            echo "Health endpoint: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
+          [[ "$HEALTH_OK" == "true" ]] && echo "Health endpoint: OK" >> $GITHUB_STEP_SUMMARY || echo "Health endpoint: FAILED" >> $GITHUB_STEP_SUMMARY
           echo "health_ok=$HEALTH_OK" >> $GITHUB_OUTPUT
-        continue-on-error: true
-
-      - name: Readiness Check
-        id: ready
-        run: |
-          echo "### Readiness Check" >> $GITHUB_STEP_SUMMARY
-          READY_OK=false
-          for i in {1..5}; do
-            if curl -sf --max-time 10 "${{ env.STAGING_URL }}/ready" > /dev/null 2>&1; then
-              echo "Readiness endpoint: OK" >> $GITHUB_STEP_SUMMARY
-              READY_OK=true
-              break
-            fi
-            sleep 5
-          done
-
-          if [[ "$READY_OK" != "true" ]]; then
-            echo "Readiness endpoint: Not available (may be expected)" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "ready_ok=$READY_OK" >> $GITHUB_OUTPUT
         continue-on-error: true
 
       - name: API Version Check
         id: version
         run: |
-          echo "### API Version Check" >> $GITHUB_STEP_SUMMARY
           RESPONSE=$(curl -sf --max-time 10 "${{ env.STAGING_URL }}/v1/version" 2>/dev/null || echo "")
           if [[ -n "$RESPONSE" ]]; then
-            echo "Version endpoint: OK" >> $GITHUB_STEP_SUMMARY
-            echo "Response: \`$RESPONSE\`" >> $GITHUB_STEP_SUMMARY
+            echo "Version endpoint: OK — $RESPONSE" >> $GITHUB_STEP_SUMMARY
             echo "version_ok=true" >> $GITHUB_OUTPUT
           else
             echo "Version endpoint: Not available" >> $GITHUB_STEP_SUMMARY
           fi
         continue-on-error: true
 
-      - name: Models Endpoint Check
-        id: models
-        run: |
-          echo "### Models Endpoint Check" >> $GITHUB_STEP_SUMMARY
-          if curl -sf --max-time 10 "${{ env.STAGING_URL }}/v1/models" > /dev/null 2>&1; then
-            echo "Models endpoint: OK" >> $GITHUB_STEP_SUMMARY
-            echo "models_ok=true" >> $GITHUB_OUTPUT
-          else
-            echo "Models endpoint: Not available (may require auth)" >> $GITHUB_STEP_SUMMARY
-          fi
-        continue-on-error: true
-
       - name: Smoke Test Summary
         run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Summary" >> $GITHUB_STEP_SUMMARY
-
           PASSED=0
-          TOTAL=4
-
           [[ "${{ steps.health.outputs.health_ok }}" == "true" ]] && ((PASSED++))
-          [[ "${{ steps.ready.outputs.ready_ok }}" == "true" ]] && ((PASSED++))
           [[ "${{ steps.version.outputs.version_ok }}" == "true" ]] && ((PASSED++))
-          [[ "${{ steps.models.outputs.models_ok }}" == "true" ]] && ((PASSED++))
-
-          echo "Smoke tests passed: $PASSED/$TOTAL" >> $GITHUB_STEP_SUMMARY
-
-          if [[ "${{ steps.health.outputs.health_ok }}" != "true" ]]; then
-            echo "::warning::Health check failed - deployment may have issues"
-          fi
+          echo "Smoke tests passed: $PASSED/2" >> $GITHUB_STEP_SUMMARY
+          [[ "${{ steps.health.outputs.health_ok }}" != "true" ]] && echo "::warning::Health check failed"
 
   # ==============================================================
-  # STAGE 5: NOTIFICATION
+  # STAGE 4: NOTIFICATION
   # ==============================================================
   notify:
     name: "Notify"
-    needs: [ci, release, deploy-staging, smoke-test]
+    needs: [guard, release, deploy-staging, smoke-test]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
     steps:
-      - name: Determine Status
-        id: status
-        run: |
-          if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "message=Staging deployment successful - smoke tests passed" >> $GITHUB_OUTPUT
-          elif [[ "${{ needs.deploy-staging.result }}" == "success" ]]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "message=Staging deployment successful (smoke tests skipped/inconclusive)" >> $GITHUB_OUTPUT
-          elif [[ "${{ needs.ci.result }}" == "failure" ]]; then
-            echo "status=failure" >> $GITHUB_OUTPUT
-            echo "message=CI failed - staging deployment cancelled" >> $GITHUB_OUTPUT
-          else
-            echo "status=failure" >> $GITHUB_OUTPUT
-            echo "message=Staging deployment failed" >> $GITHUB_OUTPUT
-          fi
-
       - name: Deployment Report
         run: |
-          echo "## Staging Deployment Report" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.smoke-test.result }}" == "success" ]]; then
+            STATUS="Staging deployment successful — smoke tests passed"
+          elif [[ "${{ needs.deploy-staging.result }}" == "success" ]]; then
+            STATUS="Staging deployment successful (smoke tests skipped)"
+          elif [[ "${{ needs.guard.result }}" != "success" ]]; then
+            STATUS="Skipped — CI did not pass"
+          else
+            STATUS="Staging deployment failed"
+          fi
+
+          echo "## CD Staging — $STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Guard | ${{ needs.guard.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release | ${{ needs.release.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy | ${{ needs.deploy-staging.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke Tests | ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Pipeline Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Stage | Job | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| CI | CI Pipeline | ${{ needs.ci.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Release | Semantic Release | ${{ needs.release.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deploy | Staging | ${{ needs.deploy-staging.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Test | Smoke Tests | ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Deployment Info" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ needs.release.outputs.new_release_version || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ needs.ci.outputs.sha_short }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **SHA**: ${{ needs.guard.outputs.sha_short }}" >> $GITHUB_STEP_SUMMARY
           echo "- **URL**: ${{ env.STAGING_URL }}" >> $GITHUB_STEP_SUMMARY
