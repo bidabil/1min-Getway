@@ -44,7 +44,6 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 
 # Upgrade pip to fix CVE-2025-8869 (symlink extraction vulnerability)
 RUN pip install --upgrade pip>=25.3
-
 # Créer un utilisateur non-root AVANT de copier les fichiers
 RUN useradd --create-home --shell /bin/bash appuser
 
