@@ -43,6 +43,7 @@ on:
   schedule:
     - cron: "0 6 * * 1"   # Security scan every Monday 6 AM UTC
     - cron: "0 0 1 * *"   # Monthly full scan
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
