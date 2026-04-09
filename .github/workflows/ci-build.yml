@@ -196,11 +196,15 @@ jobs:
             "${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${DIGEST}"
 
       - name: Build Summary
+        env:
+          VERSION: ${{ inputs.version }}
+          DIGEST: ${{ steps.build.outputs.digest || 'N/A' }}
+          PUSH_ENABLED: ${{ inputs.event_name != 'pull_request' }}
         run: |
           echo "## Build Complete" >> $GITHUB_STEP_SUMMARY
           echo "| Property  | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Version   | ${{ inputs.version }} |"                                  >> $GITHUB_STEP_SUMMARY
-          echo "| Digest    | \`${{ steps.build.outputs.digest || 'N/A' }}\` |"         >> $GITHUB_STEP_SUMMARY
-          echo "| Platforms | linux/amd64, linux/arm64 |"                               >> $GITHUB_STEP_SUMMARY
-          echo "| Push      | ${{ inputs.event_name != 'pull_request' }} |"             >> $GITHUB_STEP_SUMMARY
+          echo "| Version   | $VERSION |"                    >> $GITHUB_STEP_SUMMARY
+          echo "| Digest    | \`$DIGEST\` |"                >> $GITHUB_STEP_SUMMARY
+          echo "| Platforms | linux/amd64, linux/arm64 |"   >> $GITHUB_STEP_SUMMARY
+          echo "| Push      | $PUSH_ENABLED |"              >> $GITHUB_STEP_SUMMARY
