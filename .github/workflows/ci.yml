@@ -69,6 +69,7 @@ jobs:
       sha_short:     ${{ steps.vars.outputs.sha_short }}
       is_pr:         ${{ steps.vars.outputs.is_pr }}
       is_draft:      ${{ steps.vars.outputs.is_draft }}
+      force_all:     ${{ steps.vars.outputs.force_all }}
       version:       ${{ steps.vars.outputs.version }}
       changes_src:   ${{ steps.changes.outputs.src }}
       changes_deps:  ${{ steps.changes.outputs.deps }}
@@ -88,6 +89,7 @@ jobs:
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           echo "is_pr=${{ github.event_name == 'pull_request' }}" >> $GITHUB_OUTPUT
           echo "is_draft=${{ github.event.pull_request.draft }}" >> $GITHUB_OUTPUT
+          echo "force_all=${{ github.event_name == 'workflow_dispatch' }}" >> $GITHUB_OUTPUT
           if [[ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]]; then
             echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
           else
@@ -122,7 +124,7 @@ jobs:
     needs: init
     if: |
       needs.init.outputs.is_draft != 'true' &&
-      (needs.init.outputs.changes_src == 'true' || needs.init.outputs.changes_ci == 'true' || github.event_name == 'schedule')
+      (needs.init.outputs.force_all == 'true' || needs.init.outputs.changes_src == 'true' || needs.init.outputs.changes_ci == 'true' || github.event_name == 'schedule')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -148,7 +150,7 @@ jobs:
     needs: init
     if: |
       needs.init.outputs.is_draft != 'true' &&
-      (needs.init.outputs.changes_src == 'true' || needs.init.outputs.changes_deps == 'true')
+      (needs.init.outputs.force_all == 'true' || needs.init.outputs.changes_src == 'true' || needs.init.outputs.changes_deps == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -172,7 +174,7 @@ jobs:
     if: |
       needs.init.outputs.is_draft != 'true' &&
       inputs.skip_tests != true &&
-      (needs.init.outputs.changes_src == 'true' || needs.init.outputs.changes_deps == 'true' || needs.init.outputs.changes_tests == 'true' || github.event_name == 'schedule')
+      (needs.init.outputs.force_all == 'true' || needs.init.outputs.changes_src == 'true' || needs.init.outputs.changes_deps == 'true' || needs.init.outputs.changes_tests == 'true' || github.event_name == 'schedule')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     permissions:
@@ -270,8 +272,8 @@ jobs:
       id-token: write
     with:
       is_draft:     ${{ needs.init.outputs.is_draft == 'true' }}
-      changes_src:  ${{ needs.init.outputs.changes_src == 'true' }}
-      changes_deps: ${{ needs.init.outputs.changes_deps == 'true' }}
+      changes_src:  ${{ needs.init.outputs.changes_src == 'true' || needs.init.outputs.force_all == 'true' }}
+      changes_deps: ${{ needs.init.outputs.changes_deps == 'true' || needs.init.outputs.force_all == 'true' }}
       is_pr:        ${{ needs.init.outputs.is_pr == 'true' }}
       is_scheduled: ${{ github.event_name == 'schedule' }}
 
