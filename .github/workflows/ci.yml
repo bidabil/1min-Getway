@@ -97,10 +97,6 @@ jobs:
         id: changes
         uses: dorny/paths-filter@v4
         with:
-          # Sous workflow_call, l'event payload est différent.
-          # list-files: git force la comparaison via git diff
-          # au lieu de se fier au payload de l'event.
-          list-files: git
           filters: |
             src:
               - 'src/**'
