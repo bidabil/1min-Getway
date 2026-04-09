@@ -8,7 +8,7 @@
 
 # --- Framework & Server ---
 fastapi>=0.115.6  # Supports starlette>=0.40.0
-uvicorn[standard]==0.42.0
+uvicorn[standard]==0.44.0
 pydantic==2.12.5
 # starlette is managed by fastapi, but we pin for security
 starlette>=0.49.1  # Fixed vulnerability GHSA-7f5h-v6xp-fcq8
