@@ -95,7 +95,7 @@ jobs:
     if: |
       !inputs.is_draft &&
       (inputs.changes_deps || inputs.is_scheduled)
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.3
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.5
     permissions:
       contents: read
       security-events: write
