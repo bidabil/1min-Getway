@@ -175,7 +175,7 @@ jobs:
 
       - name: Install Cosign
         if: inputs.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v4.1.0
+        uses: sigstore/cosign-installer@v4.1.1
 
       - name: Sign Images (Keyless)
         if: inputs.event_name != 'pull_request'
