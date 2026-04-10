@@ -299,14 +299,15 @@ jobs:
           [[ "${{ needs.type-check.result }}" == "failure" ]] && PASSED=false
           [[ "${{ needs.test.result }}"       == "failure" ]] && PASSED=false
 
-          # Si tous les jobs de qualité sont skippés sans raison valide, le gate échoue
-          # (évite un gate "success" silencieux quand aucun check n'a tourné)
+          # Si tous les jobs de qualité sont skippés, le gate échoue
+          # (évite un build sans aucun check — ex: workflow_dispatch mal configuré)
           ALL_SKIPPED=true
           [[ "${{ needs.lint.result }}"       != "skipped" ]] && ALL_SKIPPED=false
           [[ "${{ needs.type-check.result }}" != "skipped" ]] && ALL_SKIPPED=false
           [[ "${{ needs.test.result }}"       != "skipped" ]] && ALL_SKIPPED=false
           if [[ "$ALL_SKIPPED" == "true" ]]; then
-            echo "::warning::All quality checks were skipped — gate passed with no checks run"
+            echo "::error::All quality checks were skipped — no checks ran, gate cannot pass"
+            PASSED=false
           fi
 
           echo "## Quality Gate" >> $GITHUB_STEP_SUMMARY
@@ -341,7 +342,10 @@ jobs:
       version:    ${{ needs.init.outputs.version }}
       sha_short:  ${{ needs.init.outputs.sha_short }}
       event_name: ${{ github.event_name }}
-    secrets: inherit  # pragma: allowlist secret
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      CODECOV_TOKEN:   ${{ secrets.CODECOV_TOKEN }}
 
   # ==============================================================
   # STAGE 6: NOTIFICATION

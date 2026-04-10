@@ -23,6 +23,16 @@ on:
         description: "Original triggering event (pull_request, push, schedule...)"
         type: string
         required: true
+    secrets:
+      DOCKER_USERNAME:
+        description: "DockerHub username"
+        required: true
+      DOCKER_PASSWORD:
+        description: "DockerHub password"
+        required: true
+      CODECOV_TOKEN:
+        description: "Codecov upload token"
+        required: false
 env:
   REGISTRY_DOCKERHUB: docker.io
   REGISTRY_GHCR: ghcr.io
@@ -86,6 +96,9 @@ jobs:
             org.opencontainers.image.version=${{ inputs.version }}
 
       # Build local pour les scans (pas de push)
+      # LIMITATION CONNUE : cette image est linux/amd64 uniquement (load: true incompatible multi-arch).
+      # L'image pushée est multi-arch (amd64 + arm64). Les scans Trivy/Grype couvrent donc
+      # uniquement la variante amd64 — les vulnérabilités spécifiques arm64 ne sont pas détectées ici.
       - name: Build for scan
         uses: docker/build-push-action@v7
         with:
@@ -104,7 +117,8 @@ jobs:
           format: "sarif"
           output: "trivy.sarif"
           severity: "CRITICAL,HIGH"
-          exit-code: "0"
+          # Bloquant sur main/push (signaux réels), advisory sur PR (bruit trop élevé)
+          exit-code: ${{ inputs.event_name == 'pull_request' && '0' || '1' }}
 
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -191,10 +205,14 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          cosign verify \
-            --certificate-identity-regexp="https://github.com/${{ github.repository }}/.*" \
-            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+          CERT_IDENTITY="--certificate-identity-regexp=https://github.com/${{ github.repository }}/.*"
+          CERT_ISSUER="--certificate-oidc-issuer=https://token.actions.githubusercontent.com"
+
+          cosign verify $CERT_IDENTITY $CERT_ISSUER \
             "${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${DIGEST}"
+
+          cosign verify $CERT_IDENTITY $CERT_ISSUER \
+            "${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}@${DIGEST}"
 
       - name: Build Summary
         env:
