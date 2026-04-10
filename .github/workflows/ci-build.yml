@@ -39,6 +39,9 @@ env:
   # IMAGE_NAME uses DOCKER_USERNAME (DockerHub handle) — distinct from github.repository_owner (GitHub handle)
   IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/1min-gateway
   GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
+  # SCAN_IMAGE is a local-only tag used for Trivy/Grype scans (never pushed).
+  # Using a hardcoded name avoids a broken tag when DOCKER_USERNAME is unavailable (e.g. Dependabot PRs).
+  SCAN_IMAGE: local/1min-gateway:scan
 
 permissions:
   contents: read
@@ -104,7 +107,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: ${{ env.IMAGE_NAME }}:scan
+          tags: ${{ env.SCAN_IMAGE }}
           cache-from: type=gha
           build-args: |
             VERSION=${{ inputs.version }}
@@ -113,7 +116,7 @@ jobs:
       - name: Trivy Scan
         uses: aquasecurity/trivy-action@0.35.0
         with:
-          image-ref: ${{ env.IMAGE_NAME }}:scan
+          image-ref: ${{ env.SCAN_IMAGE }}
           format: "sarif"
           output: "trivy.sarif"
           severity: "CRITICAL,HIGH"
@@ -134,8 +137,9 @@ jobs:
         uses: anchore/scan-action@v7
         if: always()
         with:
-          image: ${{ env.IMAGE_NAME }}:scan
-          fail-build: false
+          image: ${{ env.SCAN_IMAGE }}
+          # Bloquant sur main/push (cohérent avec Trivy), advisory sur PR
+          fail-build: ${{ inputs.event_name != 'pull_request' }}
           output-format: sarif
           severity-cutoff: high
 
@@ -167,7 +171,7 @@ jobs:
       # Étapes post-push uniquement hors PR
       - name: Generate SBOM
         if: inputs.event_name != 'pull_request'
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@v0.18.0
         with:
           image: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${{ steps.build.outputs.digest }}
           format: spdx-json
@@ -181,7 +185,6 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           sbom-path: "sbom.spdx.json"
           push-to-registry: true
-        continue-on-error: true
 
       - name: Generate Build Attestation
         if: inputs.event_name != 'pull_request'

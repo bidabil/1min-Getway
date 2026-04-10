@@ -254,7 +254,7 @@ jobs:
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Method" >> $GITHUB_STEP_SUMMARY
-          echo "- GitOps (ArgoCD/Flux)" >> $GITHUB_STEP_SUMMARY
+          echo "- kubectl (à remplacer par GitOps ArgoCD/Flux quand le déploiement réel sera implémenté)" >> $GITHUB_STEP_SUMMARY
           echo "- Environment: production" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
@@ -285,9 +285,6 @@ jobs:
             echo "::error::PRODUCTION_URL variable is not set. Configure it in Settings → Variables."
             exit 1
           fi
-
-      - name: Wait for deployment
-        run: sleep 60  # Attendre plus longtemps pour production
 
       - name: Health Check
         id: health
