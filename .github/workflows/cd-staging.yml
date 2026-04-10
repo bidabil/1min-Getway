@@ -100,7 +100,10 @@ jobs:
   deploy-staging:
     name: "Deploy Staging"
     needs: [guard, release]
-    if: always() && !cancelled() && needs.guard.result == 'success'
+    if: |
+      always() && !cancelled() &&
+      needs.guard.result == 'success' &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -124,13 +127,25 @@ jobs:
 
       - name: Get Image Digest
         id: image
+        env:
+          IMAGE_BASE: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}
+          SHA_SHORT: ${{ needs.guard.outputs.sha_short }}
         run: |
-          SHA_SHORT="${{ needs.guard.outputs.sha_short }}"
-          DIGEST=$(docker manifest inspect ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:${SHA_SHORT} --verbose 2>/dev/null | jq -r '.Descriptor.digest' || echo "")
-          if [[ -z "$DIGEST" ]]; then
-            echo "digest=${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}:${SHA_SHORT}" >> $GITHUB_OUTPUT
+          IMAGE_TAG="${IMAGE_BASE}:${SHA_SHORT}"
+
+          # Vérifier que l'image existe avant de tenter le déploiement
+          # (évite un déploiement silencieux avec une ref inexistante sur workflow_dispatch)
+          if ! docker manifest inspect "$IMAGE_TAG" > /dev/null 2>&1; then
+            echo "::error::Image not found in registry: $IMAGE_TAG"
+            echo "Ensure CI has built and pushed the image for commit ${SHA_SHORT} before running CD manually."
+            exit 1
+          fi
+
+          DIGEST=$(docker manifest inspect "$IMAGE_TAG" --verbose 2>/dev/null | jq -r '.Descriptor.digest' || echo "")
+          if [[ -n "$DIGEST" ]]; then
+            echo "digest=${IMAGE_BASE}@${DIGEST}" >> $GITHUB_OUTPUT
           else
-            echo "digest=${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${DIGEST}" >> $GITHUB_OUTPUT
+            echo "digest=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           fi
 
       - name: Deploy to Staging
@@ -188,7 +203,6 @@ jobs:
           done
           [[ "$HEALTH_OK" == "true" ]] && echo "Health endpoint: OK" >> $GITHUB_STEP_SUMMARY || echo "Health endpoint: FAILED" >> $GITHUB_STEP_SUMMARY
           echo "health_ok=$HEALTH_OK" >> $GITHUB_OUTPUT
-        continue-on-error: true
 
       - name: API Version Check
         id: version
@@ -208,7 +222,11 @@ jobs:
           [[ "${{ steps.health.outputs.health_ok }}" == "true" ]] && ((PASSED++))
           [[ "${{ steps.version.outputs.version_ok }}" == "true" ]] && ((PASSED++))
           echo "Smoke tests passed: $PASSED/2" >> $GITHUB_STEP_SUMMARY
-          [[ "${{ steps.health.outputs.health_ok }}" != "true" ]] && echo "::warning::Health check failed"
+
+          if [[ "${{ steps.health.outputs.health_ok }}" != "true" ]]; then
+            echo "::error::Staging health check failed — deployment may be broken"
+            exit 1
+          fi
 
   # ==============================================================
   # STAGE 4: NOTIFICATION
