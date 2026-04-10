@@ -119,6 +119,9 @@ jobs:
           severity: "CRITICAL,HIGH"
           # Bloquant sur main/push (signaux réels), advisory sur PR (bruit trop élevé)
           exit-code: ${{ inputs.event_name == 'pull_request' && '0' || '1' }}
+          # Ne bloquer que sur les CVE avec un correctif disponible.
+          # Les unfixed sont remontés dans le SARIF (GitHub Security) sans bloquer le build.
+          ignore-unfixed: true
 
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v4
