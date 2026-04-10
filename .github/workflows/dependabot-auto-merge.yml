@@ -165,7 +165,7 @@ jobs:
   notify:
     needs: [check-dependabot, auto-merge]
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && github.actor == 'dependabot[bot]'
 
     steps:
       - name: Determine status

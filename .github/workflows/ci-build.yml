@@ -26,7 +26,8 @@ on:
 env:
   REGISTRY_DOCKERHUB: docker.io
   REGISTRY_GHCR: ghcr.io
-  IMAGE_NAME: billelattafi/1min-gateway
+  # IMAGE_NAME uses DOCKER_USERNAME (DockerHub handle) — distinct from github.repository_owner (GitHub handle)
+  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/1min-gateway
   GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
 
 permissions:
@@ -123,7 +124,7 @@ jobs:
 
       - name: Upload Grype SARIF
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        if: always() && steps.grype.outputs.sarif != ''
         with:
           sarif_file: ${{ steps.grype.outputs.sarif }}
           category: grype

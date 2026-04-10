@@ -293,9 +293,21 @@ jobs:
         id: evaluate
         run: |
           PASSED=true
+
+          # Un job en failure fait échouer le gate
           [[ "${{ needs.lint.result }}"       == "failure" ]] && PASSED=false
           [[ "${{ needs.type-check.result }}" == "failure" ]] && PASSED=false
           [[ "${{ needs.test.result }}"       == "failure" ]] && PASSED=false
+
+          # Si tous les jobs de qualité sont skippés sans raison valide, le gate échoue
+          # (évite un gate "success" silencieux quand aucun check n'a tourné)
+          ALL_SKIPPED=true
+          [[ "${{ needs.lint.result }}"       != "skipped" ]] && ALL_SKIPPED=false
+          [[ "${{ needs.type-check.result }}" != "skipped" ]] && ALL_SKIPPED=false
+          [[ "${{ needs.test.result }}"       != "skipped" ]] && ALL_SKIPPED=false
+          if [[ "$ALL_SKIPPED" == "true" ]]; then
+            echo "::warning::All quality checks were skipped — gate passed with no checks run"
+          fi
 
           echo "## Quality Gate" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
