@@ -88,7 +88,32 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
-      github-actions-all:
+      # Actions GitHub core (checkout, setup-python, cache, upload-artifact)
+      # Regroupées car elles changent ensemble et sont basses en risque
+      github-actions-core:
+        patterns:
+          - "actions/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Actions de sécurité — regroupées séparément pour review dédiée
+      # Une cassure ici impacte directement la supply chain
+      github-actions-security:
+        patterns:
+          - "aquasecurity/*"
+          - "anchore/*"
+          - "sigstore/*"
+          - "ossf/*"
+          - "github/codeql-action"
+          - "semgrep/*"
+          - "google/osv-scanner-action"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Reste des actions (docker, semantic-release, test-summary, etc.)
+      github-actions-other:
         patterns:
           - "*"
         update-types:
