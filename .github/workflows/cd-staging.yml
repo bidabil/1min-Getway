@@ -25,14 +25,7 @@ env:
   STAGING_URL: ${{ vars.STAGING_URL }}
 
 permissions:
-  contents: write        # semantic-release crée des tags/releases
-  packages: write        # push images Docker
-  issues: write          # semantic-release commente les issues
-  pull-requests: write   # semantic-release + dependency-review
-  security-events: write # CodeQL, OSV Scanner, Trivy
-  actions: read          # OSV Scanner
-  id-token: write        # Cosign (signature keyless) + attestations
-  attestations: write    # build provenance
+  contents: read  # Minimum global — chaque job déclare ses permissions spécifiques
 
 jobs:
   # ==============================================================
