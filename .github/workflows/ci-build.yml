@@ -145,12 +145,14 @@ jobs:
         if: always()
         with:
           image: ${{ env.SCAN_IMAGE }}
-          # Bloquant sur main/push (cohérent avec Trivy), advisory sur PR
-          fail-build: ${{ inputs.event_name != 'pull_request' }}
+          # Advisory seulement — Grype (Anchore DB) et Trivy (aquasecurity DB) utilisent
+          # des bases de vulnérabilités différentes et divergent fréquemment sur les HIGH.
+          # Trivy est le scanner bloquant (exit-code: 1 sur main) ; Grype fournit
+          # une couverture complémentaire visible dans GitHub Security tab (SARIF).
+          # fail-build: false sur tous les événements évite les faux positifs DB-croisés.
+          fail-build: false
           output-format: sarif
           severity-cutoff: high
-          # Aligner avec Trivy ignore-unfixed:true — ne bloquer que sur les CVE
-          # ayant un correctif disponible. Les unfixed restent dans le SARIF.
           only-fixed: true
 
       - name: Upload Grype SARIF
