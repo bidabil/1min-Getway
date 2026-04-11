@@ -37,7 +37,8 @@ jobs:
     timeout-minutes: 2
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     outputs:
       sha_short: ${{ steps.sha.outputs.sha_short }}
     steps:
@@ -74,9 +75,9 @@ jobs:
         uses: cycjimmy/semantic-release-action@v6
         with:
           extra_plugins: |
-            semantic-release-gitmoji
-            @semantic-release/changelog
-            @semantic-release/git
+            semantic-release-gitmoji@3.4.6
+            @semantic-release/changelog@6.0.3
+            @semantic-release/git@10.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -150,7 +151,7 @@ jobs:
           echo "**Version**: ${{ needs.release.outputs.new_release_version || needs.guard.outputs.sha_short }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Method" >> $GITHUB_STEP_SUMMARY
-          echo "- GitOps (ArgoCD/Flux)" >> $GITHUB_STEP_SUMMARY
+          echo "- kubectl (à remplacer par GitOps ArgoCD/Flux quand le déploiement réel sera implémenté)" >> $GITHUB_STEP_SUMMARY
           echo "- Environment: staging" >> $GITHUB_STEP_SUMMARY
 
           # TODO: Ajouter ici la commande de déploiement réel
@@ -178,9 +179,6 @@ jobs:
             echo "::error::STAGING_URL variable is not set. Configure it in Settings → Variables."
             exit 1
           fi
-
-      - name: Wait for deployment
-        run: sleep 30
 
       - name: Health Check
         id: health

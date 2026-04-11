@@ -65,7 +65,10 @@ updates:
       - dependency-name: "tiktoken"
         update-types: ["version-update:semver-major"]
 
-    versioning-strategy: increase
+    # versioning-strategy non définie → comportement par défaut "auto".
+    # "increase" était utilisé mais élargit les contraintes de version sans lockfile
+    # pour valider les bornes. "lockfile-only" nécessiterait un poetry.lock ou pip-tools.
+    # Si un lockfile est ajouté plus tard, passer à "lockfile-only".
 
   # ============================================================
   # GITHUB ACTIONS
