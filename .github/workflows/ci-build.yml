@@ -174,7 +174,7 @@ jobs:
       # Étapes post-push uniquement hors PR
       - name: Generate SBOM
         if: inputs.event_name != 'pull_request'
-        uses: anchore/sbom-action@v0.18.0
+        uses: anchore/sbom-action@v0.24.0
         with:
           image: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${{ steps.build.outputs.digest }}
           format: spdx-json
