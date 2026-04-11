@@ -107,12 +107,13 @@ jobs:
         with:
           context: .
           load: true
-          # pull:true force le pull du tag python:3.12-slim le plus récent.
-          # Sans ça, la couche apt-get upgrade est réutilisée depuis le cache GHA
-          # même si de nouveaux patchs Debian sont disponibles → CVEs fixables manquées.
-          pull: true
+          # no-cache:true garantit un build totalement frais pour les scans de sécurité.
+          # pull:true ne suffit pas — il n'invalide le cache que si le tag upstream a changé,
+          # mais Debian publie des patchs de sécurité sans que python:3.12-slim soit rebuild.
+          # Conséquence : apt-get upgrade resterait en cache et les CVEs fixables seraient manquées.
+          # Le build multi-arch (étape suivante) garde son cache GHA pour la vitesse.
+          no-cache: true
           tags: ${{ env.SCAN_IMAGE }}
-          cache-from: type=gha
           build-args: |
             VERSION=${{ inputs.version }}
             COMMIT=${{ inputs.sha_short }}
