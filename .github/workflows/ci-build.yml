@@ -142,6 +142,9 @@ jobs:
           fail-build: ${{ inputs.event_name != 'pull_request' }}
           output-format: sarif
           severity-cutoff: high
+          # Aligner avec Trivy ignore-unfixed:true — ne bloquer que sur les CVE
+          # ayant un correctif disponible. Les unfixed restent dans le SARIF.
+          only-fixed: true
 
       - name: Upload Grype SARIF
         uses: github/codeql-action/upload-sarif@v4
