@@ -2,63 +2,50 @@
   "branches": ["main"],
   "plugins": [
     [
-      "semantic-release-gitmoji",
-      {
-        "releaseRules": {
-          "major": [":boom:"],
-          "minor": [":sparkles:", ":rocket:", ":lipstick:", ":zap:"],
-          "patch": [":bug:", ":lock:", ":ambulance:", ":arrow_up:", ":wrench:", ":recycle:", ":fire:"]
-        },
-        "releaseNotes": {
-          "template": {
-            "commitTemplate": "{{emoji}} {{subject}} ({{hash}})",
-            "issueTemplate": "{{emoji}} {{subject}} #{{issue}}"
-          },
-          "partials": {
-            "emoji": "{{#if emoji}}{{emoji}}{{/if}}"
-          }
-        }
-      }
-    ],
-    [
       "@semantic-release/commit-analyzer",
       {
         "preset": "conventionalcommits",
-        "releaseRules": [
-          {"type": "feat", "release": "minor"},
-          {"type": "fix", "release": "patch"},
-          {"type": "perf", "release": "patch"},
-          {"type": "revert", "release": "patch"},
-          {"type": "docs", "release": false},
-          {"type": "style", "release": false},
-          {"type": "chore", "release": false},
-          {"type": "refactor", "release": "patch"},
-          {"type": "test", "release": false},
-          {"type": "build", "release": false},
-          {"type": "ci", "release": false}
-        ],
         "parserOpts": {
+          "headerPattern": "^(?:\\S+\\s+)?(\\w[\\w-]*)(?:\\(([^)]+)\\))?!?:\\s+(.+)$",
+          "headerCorrespondence": ["type", "scope", "subject"],
           "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES", "BREAKING"]
-        }
+        },
+        "releaseRules": [
+          {"type": "feat",     "release": "minor"},
+          {"type": "fix",      "release": "patch"},
+          {"type": "perf",     "release": "patch"},
+          {"type": "revert",   "release": "patch"},
+          {"type": "refactor", "release": "patch"},
+          {"type": "docs",     "release": false},
+          {"type": "style",    "release": false},
+          {"type": "chore",    "release": false},
+          {"type": "test",     "release": false},
+          {"type": "build",    "release": false},
+          {"type": "ci",       "release": false}
+        ]
       }
     ],
     [
       "@semantic-release/release-notes-generator",
       {
         "preset": "conventionalcommits",
+        "parserOpts": {
+          "headerPattern": "^(?:\\S+\\s+)?(\\w[\\w-]*)(?:\\(([^)]+)\\))?!?:\\s+(.+)$",
+          "headerCorrespondence": ["type", "scope", "subject"]
+        },
         "presetConfig": {
           "types": [
-            {"type": "feat", "section": "✨ Features", "hidden": false},
-            {"type": "fix", "section": "🐛 Bug Fixes", "hidden": false},
-            {"type": "perf", "section": "⚡ Performance", "hidden": false},
-            {"type": "revert", "section": "⏪ Reverts", "hidden": false},
-            {"type": "docs", "section": "📝 Documentation", "hidden": false},
-            {"type": "style", "section": "🎨 Styles", "hidden": true},
-            {"type": "chore", "section": "🔧 Chores", "hidden": true},
-            {"type": "refactor", "section": "♻️ Code Refactoring", "hidden": false},
-            {"type": "test", "section": "✅ Tests", "hidden": true},
-            {"type": "build", "section": "📦 Build System", "hidden": true},
-            {"type": "ci", "section": "🔄 CI/CD", "hidden": true}
+            {"type": "feat",     "section": "✨ Features",           "hidden": false},
+            {"type": "fix",      "section": "🐛 Bug Fixes",          "hidden": false},
+            {"type": "perf",     "section": "⚡ Performance",         "hidden": false},
+            {"type": "revert",   "section": "⏪ Reverts",             "hidden": false},
+            {"type": "docs",     "section": "📝 Documentation",       "hidden": false},
+            {"type": "refactor", "section": "♻️ Code Refactoring",    "hidden": false},
+            {"type": "style",    "section": "🎨 Styles",              "hidden": true},
+            {"type": "chore",    "section": "🔧 Chores",              "hidden": true},
+            {"type": "test",     "section": "✅ Tests",               "hidden": true},
+            {"type": "build",    "section": "📦 Build System",        "hidden": true},
+            {"type": "ci",       "section": "🔄 CI/CD",               "hidden": true}
           ]
         },
         "writerOpts": {
