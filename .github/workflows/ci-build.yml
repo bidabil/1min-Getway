@@ -154,8 +154,12 @@ jobs:
           category: grype
 
       # Build final multi-arch + push (sauf PR)
+      # Skippé sur les PRs : le build de scan (load:true) suffit pour les scans.
+      # Les tags meta incluent docker.io/<DOCKER_USERNAME>/... qui est vide sur les PRs
+      # Dependabot (secret non disponible) → tag invalide → build fail.
       - name: Build and Push
         id: build
+        if: inputs.event_name != 'pull_request'
         uses: docker/build-push-action@v7
         with:
           context: .
