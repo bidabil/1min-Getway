@@ -262,6 +262,12 @@ jobs:
   # ==============================================================
   # STAGE 3: SECURITY (Parallel, advisory — délégué à ci-security.yml)
   # ==============================================================
+  # DESIGN INTENTIONNEL : ce job n'est PAS dans les needs du quality-gate.
+  # Les scans SAST (Semgrep, CodeQL) sont advisory : ils remontent dans GitHub
+  # Security tab mais ne bloquent pas le build. Raisons :
+  #   - Taux de faux positifs élevé sur les règles statiques
+  #   - Les findings critiques nécessitent une review humaine, pas un blocage automatique
+  # Les scans d'image (Trivy, Grype) dans ci-build.yml sont eux bloquants sur main.
   security:
     name: "Security"
     needs: init
@@ -296,10 +302,12 @@ jobs:
         run: |
           PASSED=true
 
-          # Un job en failure fait échouer le gate
-          [[ "${{ needs.lint.result }}"       == "failure" ]] && PASSED=false
-          [[ "${{ needs.type-check.result }}" == "failure" ]] && PASSED=false
-          [[ "${{ needs.test.result }}"       == "failure" ]] && PASSED=false
+          # failure OU cancelled font échouer le gate.
+          # Un job cancelled (timeout, concurrency kill) ne doit pas laisser PASSED=true
+          # et permettre un push sans que les checks aient tourné.
+          [[ "${{ needs.lint.result }}"       =~ ^(failure|cancelled)$ ]] && PASSED=false
+          [[ "${{ needs.type-check.result }}" =~ ^(failure|cancelled)$ ]] && PASSED=false
+          [[ "${{ needs.test.result }}"       =~ ^(failure|cancelled)$ ]] && PASSED=false
 
           # Si tous les jobs de qualité sont skippés, le gate échoue
           # (évite un build sans aucun check — ex: workflow_dispatch mal configuré)
