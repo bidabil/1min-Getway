@@ -62,6 +62,21 @@ jobs:
           echo "Dependency names: $DEPENDENCY_NAMES"
           echo "Alert state:      ${ALERT_STATE:-none}"
 
+      # Garantit qu'aucun commit externe n'a été injecté sur la branche Dependabot
+      # après sa création (PR takeover). Tout commit hors dependabot[bot] bloque le merge.
+      - name: Verify all commits from dependabot[bot]
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NON_BOT=$(gh pr view "$PR_NUMBER" --json commits \
+            --jq '[.commits[].authors[].login] | map(select(. != "dependabot[bot]")) | length')
+          if [[ "$NON_BOT" -gt 0 ]]; then
+            echo "::error::PR contains $NON_BOT commit(s) not authored by dependabot[bot] — aborting auto-merge"
+            exit 1
+          fi
+          echo "All commits verified from dependabot[bot]"
+
   # ============================================================
   # JOB 2: Auto-approve et merge selon les règles
   # ============================================================
@@ -75,6 +90,21 @@ jobs:
       pull-requests: write  # requis pour gh pr review + gh pr comment
 
     steps:
+      # ============================================================
+      # PRIORITÉ SÉCURITÉ : Flaguer les mises à jour liées à une CVE
+      # Indépendant des règles de merge — ajoute visibilité immédiate.
+      # ============================================================
+      - name: Flag security advisory updates
+        if: needs.check-dependabot.outputs.alert-state == 'open'
+        env:
+          PR_URL:           ${{ github.event.pull_request.html_url }}
+          DEPENDENCY_NAMES: ${{ needs.check-dependabot.outputs.dependency-names }}
+          GITHUB_TOKEN:     ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Security advisory update detected — adding priority comment"
+          gh pr comment "$PR_URL" \
+            --body "**Security Advisory Update** — This PR was triggered by an open security vulnerability. Please review and merge promptly.\n\nAffected: \`$DEPENDENCY_NAMES\`"
+
       # ============================================================
       # RÈGLE 1 : Auto-merge des patchs dev
       # ============================================================

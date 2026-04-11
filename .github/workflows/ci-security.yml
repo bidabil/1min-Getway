@@ -68,13 +68,25 @@ jobs:
           ruff check . --select S --output-format=github
 
       - name: Semgrep Scan
-        uses: semgrep/semgrep-action@v1
+        # CLI directe : semgrep-action v1 ne produit pas de fichier SARIF uploadable séparément.
+        # exit 0 sur findings (advisory) ; exit 2 sur erreur réelle.
+        run: |
+          pip install semgrep --quiet
+          semgrep scan \
+            --config p/python \
+            --config p/security-audit \
+            --config p/secrets \
+            --config p/owasp-top-ten \
+            --sarif --output semgrep.sarif \
+            . ; CODE=$?
+          [[ $CODE -eq 2 ]] && exit 2 || true
+
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('semgrep.sarif') != ''
         with:
-          config: >-
-            p/python
-            p/security-audit
-            p/secrets
-            p/owasp-top-ten
+          sarif_file: semgrep.sarif
+          category: semgrep
 
       - name: CodeQL Initialize
         uses: github/codeql-action/init@v4
@@ -126,25 +138,21 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
 
-      - run: pip install -r requirements.txt pip-audit safety
+      # pip-audit sans installer les dépendances scannées (évite de contaminer l'env de scan).
+      # safety supprimé : redondant avec pip-audit + OSV, et nécessite un compte payant.
+      - run: pip install pip-audit
 
       - name: Pip Audit
         run: |
-          pip-audit --format=json --output=pip-audit.json || true
-          pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
-
-      - name: Safety Scan
-        run: safety scan --output json > safety.json || true
-        continue-on-error: true
+          pip-audit -r requirements.txt --format=json --output=pip-audit.json || true
+          pip-audit -r requirements.txt --format=markdown >> $GITHUB_STEP_SUMMARY || true
 
       - name: Upload Security Results
         uses: actions/upload-artifact@v7
         if: always()
         with:
           name: dependency-scan-results
-          path: |
-            pip-audit.json
-            safety.json
+          path: pip-audit.json
           retention-days: 30
 
   # ==============================================================
