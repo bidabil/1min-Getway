@@ -50,7 +50,7 @@ jobs:
   build:
     name: "Build & Push"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45  # no-cache sur arm64 (émulation QEMU) peut prendre 30-40 min
     permissions:
       contents: read
       packages: write
@@ -98,17 +98,24 @@ jobs:
             org.opencontainers.image.vendor=Billel Attafi
             org.opencontainers.image.version=${{ inputs.version }}
 
-      # Build local pour les scans (pas de push)
-      # LIMITATION CONNUE : cette image est linux/amd64 uniquement (load: true incompatible multi-arch).
-      # L'image pushée est multi-arch (amd64 + arm64). Les scans Trivy/Grype couvrent donc
-      # uniquement la variante amd64 — les vulnérabilités spécifiques arm64 ne sont pas détectées ici.
+      # Build local pour les scans (amd64 uniquement — load:true incompatible multi-arch).
+      #
+      # ARCHITECTURE DES CACHES :
+      # 1. Ce build (no-cache + cache-to) reconstruit tout depuis zéro avec les derniers
+      #    patchs Debian, puis écrit ces layers frais dans le cache GHA.
+      # 2. Le build multi-arch suivant (cache-from) réutilise ces layers frais pour amd64
+      #    et reconstruit arm64 from scratch (pas de cache précédent → aussi des packages frais).
+      # Résultat : les layers amd64 scannés ici sont bit-for-bit identiques aux layers
+      # amd64 de l'image pushée. Les CVEs détectées reflètent donc l'image déployée.
+      # Un scan post-push par digest (étape plus bas) confirme sur l'image réelle en registry.
       - name: Build for scan
         uses: docker/build-push-action@v7
         with:
           context: .
           load: true
+          no-cache: true   # Garantit apt-get upgrade avec les derniers patchs Debian
+          cache-to: type=gha,mode=max  # Alimente le cache GHA pour le build multi-arch
           tags: ${{ env.SCAN_IMAGE }}
-          cache-from: type=gha
           build-args: |
             VERSION=${{ inputs.version }}
             COMMIT=${{ inputs.sha_short }}
@@ -154,8 +161,12 @@ jobs:
           category: grype
 
       # Build final multi-arch + push (sauf PR)
+      # Skippé sur les PRs : le build de scan (load:true) suffit pour les scans.
+      # Les tags meta incluent docker.io/<DOCKER_USERNAME>/... qui est vide sur les PRs
+      # Dependabot (secret non disponible) → tag invalide → build fail.
       - name: Build and Push
         id: build
+        if: inputs.event_name != 'pull_request'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -170,6 +181,29 @@ jobs:
           build-args: |
             VERSION=${{ inputs.version }}
             COMMIT=${{ inputs.sha_short }}
+
+      # Scan post-push par digest — image réelle en registry (non bloquant : local scan déjà gate)
+      # Upload dans GitHub Security pour confirmer que l'image déployée = image scannée.
+      - name: Trivy Scan (image pushée par digest)
+        if: inputs.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${{ steps.build.outputs.digest }}
+          format: "sarif"
+          output: "trivy-pushed.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"      # Non bloquant : sert à l'observabilité post-push
+          ignore-unfixed: true
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Trivy SARIF (image pushée)
+        if: always() && inputs.event_name != 'pull_request' && hashFiles('trivy-pushed.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: "trivy-pushed.sarif"
+          category: trivy-pushed
 
       # Étapes post-push uniquement hors PR
       - name: Generate SBOM

@@ -18,15 +18,23 @@ RUN pip install --user --no-cache-dir -r requirements.txt
 # --- STAGE 2: Runtime (Image finale) ---
 FROM python:3.12-slim
 
+# Build args injected by ci-build.yml (VERSION, COMMIT)
+ARG VERSION="0.0.0"
+ARG COMMIT="unknown"
+
 # Labels OCI standards
 LABEL org.opencontainers.image.title="1min-Gateway"
 LABEL org.opencontainers.image.description="Intelligent API Gateway for AI models (FastAPI)"
 LABEL org.opencontainers.image.vendor="Billel Attafi"
 LABEL org.opencontainers.image.source="https://github.com/billelattafi/1min-gateway"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${COMMIT}"
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH=/home/appuser/.local/bin:$PATH
+ENV APP_VERSION="${VERSION}"
+ENV APP_COMMIT="${COMMIT}"
 
 WORKDIR /app
 
