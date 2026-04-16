@@ -36,7 +36,6 @@ on:
 
 env:
   PYTHON_VERSION: "3.12"
-  RUFF_VERSION: "0.8.0"
 
 permissions:
   contents: read
@@ -64,7 +63,7 @@ jobs:
 
       - name: Ruff Security Rules
         run: |
-          pip install ruff==${{ env.RUFF_VERSION }}
+          pip install ruff
           ruff check . --select S --output-format=github
 
       - name: Semgrep Scan

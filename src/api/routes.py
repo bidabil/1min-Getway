@@ -105,7 +105,6 @@ async def detailed_health(request: Request) -> JSONResponse:
     # Perform comprehensive health check
     result = perform_health_check(
         include_api=True,
-        include_memcached=True,
     )
 
     status_code = get_health_status_code(result)

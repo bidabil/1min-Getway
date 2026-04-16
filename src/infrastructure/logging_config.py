@@ -204,15 +204,7 @@ def get_logger(name: str) -> StructuredLogger:
 
 
 class RequestLogger:
-    """
-    Context manager for logging HTTP requests with timing.
-
-    Usage:
-        with RequestLogger(logger, "POST /v1/chat/completions", request_id) as req_log:
-            # ... handle request ...
-            req_log.add_field("model", "gpt-4o")
-            req_log.add_field("tokens", 150)
-    """
+    """Context manager for logging HTTP requests with timing."""
 
     def __init__(
         self,
@@ -227,18 +219,12 @@ class RequestLogger:
         self.fields: dict[str, Any] = {}
 
     def __enter__(self) -> "RequestLogger":
-        """Start timing the request."""
         self.start_time = time.perf_counter()
-        self.logger.debug(
-            f"Started: {self.operation}",
-            request_id=self.request_id,
-        )
+        self.logger.debug(f"Started: {self.operation}", request_id=self.request_id)
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Log the completion of the request."""
         duration_ms = (time.perf_counter() - self.start_time) * 1000 if self.start_time else 0
-
         if exc_type:
             self.logger.error(
                 f"Failed: {self.operation}",
@@ -257,9 +243,7 @@ class RequestLogger:
             )
 
     def add_field(self, key: str, value: Any) -> None:
-        """Add a field to the log entry."""
         self.fields[key] = value
 
     def add_fields(self, fields: dict[str, Any]) -> None:
-        """Add multiple fields to the log entry."""
         self.fields.update(fields)

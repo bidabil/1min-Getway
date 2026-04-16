@@ -6,15 +6,10 @@ Includes request counters, histograms, and gauges.
 """
 
 import logging
-import time
-from collections.abc import Callable
 from dataclasses import dataclass
-from functools import wraps
-from typing import Any, TypeVar
+from typing import Any
 
 logger = logging.getLogger("1min-gateway.metrics")
-
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 @dataclass
@@ -303,70 +298,11 @@ CACHE_MISSES = metrics.counter(
 )
 
 
-def track_request(method: str, endpoint: str, status: int, duration: float) -> None:
-    """Track an HTTP request."""
-    REQUEST_COUNT.inc(method=method, endpoint=endpoint, status=str(status))
-    REQUEST_DURATION.observe(duration, method=method, endpoint=endpoint)
-
-
-def track_model_request(model: str, status: str) -> None:
-    """Track a model request."""
-    MODEL_REQUESTS.inc(model=model, status=status)
-
-
 def update_circuit_breaker_metrics(name: str, state: str, failures: int) -> None:
     """Update circuit breaker metrics."""
     state_values = {"CLOSED": 0, "HALF_OPEN": 1, "OPEN": 2}
     CIRCUIT_BREAKER_STATE.set(state_values.get(state, -1), name=name)
     CIRCUIT_BREAKER_FAILURES.set(failures, name=name)
-
-
-def track_cache_hit(cache_name: str) -> None:
-    """Track a cache hit."""
-    CACHE_HITS.inc(cache_name=cache_name)
-
-
-def track_cache_miss(cache_name: str) -> None:
-    """Track a cache miss."""
-    CACHE_MISSES.inc(cache_name=cache_name)
-
-
-def timed(histogram: Histogram, **labels: str) -> Callable[[F], F]:
-    """
-    Decorator to time a function and record in histogram.
-
-    Usage:
-        @timed(REQUEST_DURATION, method="GET", endpoint="/v1/models")
-        async def get_models():
-            ...
-    """
-
-    def decorator(func: F) -> F:
-        @wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            start = time.perf_counter()
-            try:
-                return await func(*args, **kwargs)
-            finally:
-                duration = time.perf_counter() - start
-                histogram.observe(duration, **labels)
-
-        @wraps(func)
-        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-            start = time.perf_counter()
-            try:
-                return func(*args, **kwargs)
-            finally:
-                duration = time.perf_counter() - start
-                histogram.observe(duration, **labels)
-
-        import asyncio
-
-        if asyncio.iscoroutinefunction(func):
-            return async_wrapper  # type: ignore
-        return sync_wrapper  # type: ignore
-
-    return decorator
 
 
 def get_metrics_output() -> str:

@@ -8,7 +8,6 @@ Tests cover:
 - check_api_connectivity()
 - check_circuit_breaker()
 - check_configuration()
-- check_memcached()
 - perform_health_check()
 - get_health_status_code()
 """
@@ -24,7 +23,6 @@ from src.infrastructure.health_service import (
     check_api_connectivity,
     check_circuit_breaker,
     check_configuration,
-    check_memcached,
     get_health_status_code,
     perform_health_check,
 )
@@ -396,62 +394,15 @@ class TestCheckConfiguration:
         assert len(result.details["issues"]) == 2
 
 
-class TestCheckMemcached:
-    """Tests for check_memcached function."""
-
-    @patch("src.infrastructure.health_service.MEMCACHED_HOST", "localhost")
-    @patch("src.infrastructure.health_service.MEMCACHED_PORT", 11211)
-    def test_memcached_success(self):
-        """Test successful Memcached connection."""
-        with patch("socket.socket") as mock_socket_class:
-            mock_sock = MagicMock()
-            mock_sock.connect_ex.return_value = 0  # Success
-            mock_socket_class.return_value = mock_sock
-
-            result = check_memcached()
-
-            assert result.name == "memcached"
-            assert result.status == HealthStatus.HEALTHY
-            assert result.response_time_ms is not None
-
-    @patch("src.infrastructure.health_service.MEMCACHED_HOST", "localhost")
-    @patch("src.infrastructure.health_service.MEMCACHED_PORT", 11211)
-    def test_memcached_connection_failed(self):
-        """Test Memcached connection failed."""
-        with patch("socket.socket") as mock_socket_class:
-            mock_sock = MagicMock()
-            mock_sock.connect_ex.return_value = 1  # Connection failed
-            mock_socket_class.return_value = mock_sock
-
-            result = check_memcached()
-
-            assert result.status == HealthStatus.DEGRADED
-            assert "not reachable" in result.message.lower()
-
-    @patch("src.infrastructure.health_service.MEMCACHED_HOST", "localhost")
-    @patch("src.infrastructure.health_service.MEMCACHED_PORT", 11211)
-    def test_memcached_exception(self):
-        """Test Memcached check with exception."""
-        with patch("socket.socket") as mock_socket_class:
-            mock_socket_class.side_effect = Exception("Socket error")
-
-            result = check_memcached()
-
-            assert result.status == HealthStatus.DEGRADED
-            assert "error" in result.message.lower()
-
-
 class TestPerformHealthCheck:
     """Tests for perform_health_check function."""
 
     @patch("src.infrastructure.health_service.check_api_connectivity")
     @patch("src.infrastructure.health_service.check_circuit_breaker")
     @patch("src.infrastructure.health_service.check_configuration")
-    @patch("src.infrastructure.health_service.check_memcached")
     @patch("src.infrastructure.health_service.APP_ENV", "test")
     def test_perform_health_check_all_healthy(
         self,
-        mock_memcached,
         mock_config,
         mock_cb,
         mock_api,
@@ -469,26 +420,20 @@ class TestPerformHealthCheck:
             name="api",
             status=HealthStatus.HEALTHY,
         )
-        mock_memcached.return_value = ComponentHealth(
-            name="memcached",
-            status=HealthStatus.HEALTHY,
-        )
 
         result = perform_health_check()
 
         assert result.status == HealthStatus.HEALTHY
         assert result.environment == "test"
-        assert len(result.components) == 4
+        assert len(result.components) == 3
         assert result.checked_at != ""
 
     @patch("src.infrastructure.health_service.check_api_connectivity")
     @patch("src.infrastructure.health_service.check_circuit_breaker")
     @patch("src.infrastructure.health_service.check_configuration")
-    @patch("src.infrastructure.health_service.check_memcached")
     @patch("src.infrastructure.health_service.APP_ENV", "test")
     def test_perform_health_check_one_unhealthy(
         self,
-        mock_memcached,
         mock_config,
         mock_cb,
         mock_api,
@@ -506,10 +451,6 @@ class TestPerformHealthCheck:
             name="api",
             status=HealthStatus.UNHEALTHY,
         )
-        mock_memcached.return_value = ComponentHealth(
-            name="memcached",
-            status=HealthStatus.HEALTHY,
-        )
 
         result = perform_health_check()
 
@@ -518,10 +459,8 @@ class TestPerformHealthCheck:
     @patch("src.infrastructure.health_service.check_api_connectivity")
     @patch("src.infrastructure.health_service.check_circuit_breaker")
     @patch("src.infrastructure.health_service.check_configuration")
-    @patch("src.infrastructure.health_service.check_memcached")
     def test_perform_health_check_one_degraded(
         self,
-        mock_memcached,
         mock_config,
         mock_cb,
         mock_api,
@@ -537,10 +476,6 @@ class TestPerformHealthCheck:
         )
         mock_api.return_value = ComponentHealth(
             name="api",
-            status=HealthStatus.HEALTHY,
-        )
-        mock_memcached.return_value = ComponentHealth(
-            name="memcached",
             status=HealthStatus.HEALTHY,
         )
 
@@ -562,35 +497,10 @@ class TestPerformHealthCheck:
             status=HealthStatus.HEALTHY,
         )
 
-        result = perform_health_check(include_api=False, include_memcached=False)
+        result = perform_health_check(include_api=False)
 
         assert result.status == HealthStatus.HEALTHY
         assert len(result.components) == 2
-
-    @patch("src.infrastructure.health_service.check_circuit_breaker")
-    @patch("src.infrastructure.health_service.check_configuration")
-    @patch("src.infrastructure.health_service.check_memcached")
-    @patch("src.infrastructure.health_service.APP_ENV", "test")
-    def test_perform_health_check_skip_memcached(
-        self,
-        mock_memcached,
-        mock_config,
-        mock_cb,
-    ):
-        """Test health check without Memcached check."""
-        mock_cb.return_value = ComponentHealth(
-            name="circuit_breaker",
-            status=HealthStatus.HEALTHY,
-        )
-        mock_config.return_value = ComponentHealth(
-            name="configuration",
-            status=HealthStatus.HEALTHY,
-        )
-
-        perform_health_check(include_api=False, include_memcached=False)
-
-        # Memcached should not be called
-        mock_memcached.assert_not_called()
 
 
 class TestGetHealthStatusCode:

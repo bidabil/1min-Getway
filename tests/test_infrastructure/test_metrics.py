@@ -8,13 +8,7 @@ Tests cover:
 - Histogram class
 - MetricsRegistry class
 - Helper functions
-- timed decorator
 """
-
-import asyncio
-import time
-
-import pytest
 
 from src.infrastructure.metrics import (
     ACTIVE_REQUESTS,
@@ -29,7 +23,6 @@ from src.infrastructure.metrics import (
     MetricsRegistry,
     MetricValue,
     get_metrics_output,
-    timed,
 )
 
 
@@ -407,61 +400,6 @@ class TestHelperFunctions:
 
         values = counter.get_values()
         assert values[0].value == 1.0
-
-
-class TestTimedDecorator:
-    """Tests for timed decorator."""
-
-    def test_timed_sync_function(self):
-        """Test timing a synchronous function."""
-        registry = MetricsRegistry(namespace="test")
-        hist = registry.histogram("duration", "Test")
-
-        @timed(hist, endpoint="/test")
-        def sync_func():
-            time.sleep(0.01)
-            return "done"
-
-        result = sync_func()
-
-        assert result == "done"
-        values = hist.get_values()
-        assert len(values) == 1
-        assert values[0]["sum"] > 0
-
-    @pytest.mark.asyncio
-    async def test_timed_async_function(self):
-        """Test timing an async function."""
-        registry = MetricsRegistry(namespace="test")
-        hist = registry.histogram("duration", "Test")
-
-        @timed(hist, endpoint="/test")
-        async def async_func():
-            await asyncio.sleep(0.01)
-            return "done"
-
-        result = await async_func()
-
-        assert result == "done"
-        values = hist.get_values()
-        assert len(values) == 1
-        assert values[0]["sum"] > 0
-
-    def test_timed_with_exception(self):
-        """Test timing a function that raises an exception."""
-        registry = MetricsRegistry(namespace="test")
-        hist = registry.histogram("duration", "Test")
-
-        @timed(hist, endpoint="/test")
-        def failing_func():
-            raise ValueError("Test error")
-
-        with pytest.raises(ValueError):
-            failing_func()
-
-        # Should still record the duration
-        values = hist.get_values()
-        assert len(values) == 1
 
 
 class TestGetMetricsOutput:

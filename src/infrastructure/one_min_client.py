@@ -19,31 +19,8 @@ API_TIMEOUT = 30
 CONVERSATION_API_URL = "https://api.1min.ai/api/conversations"
 
 
-def get_retry_session(
-    retries: int = 3,
-    backoff_factor: float = 0.5,
-    status_forcelist: tuple[int, ...] = (429, 500, 502, 503, 504),
-) -> requests.Session:
-    """Crée une session requests avec retry automatique"""
-    session = requests.Session()
-    retry_strategy = Retry(
-        total=retries,
-        backoff_factor=backoff_factor,
-        status_forcelist=status_forcelist,
-        allowed_methods=["POST", "GET"],
-        raise_on_status=False,
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount(
-        "http://",  # nosemgrep: python.lang.security.audit.insecure-transport.requests.request-session-with-http.request-session-with-http
-        adapter,
-    )
-    session.mount("https://", adapter)
-    return session
-
-
 class CircuitBreaker:
-    """Circuit breaker pour protéger l'infrastructure"""
+    """Circuit breaker pour protéger l'infrastructure."""
 
     def __init__(self, failure_threshold: int = 5, timeout: int = 60) -> None:
         self.failure_threshold = failure_threshold
@@ -52,36 +29,50 @@ class CircuitBreaker:
         self.opened_at: float | None = None
 
     def call_failed(self) -> None:
-        """Enregistre un échec"""
         self.failures += 1
         if self.failures >= self.failure_threshold:
             self.opened_at = time.time()
-            logger.error(
-                "⚠️ CIRCUIT BREAKER OUVERT | %d échecs. Pause de %ds.",
-                self.failures,
-                self.timeout,
-            )
+            logger.error("⚠️ CIRCUIT BREAKER OUVERT | %d échecs.", self.failures)
 
     def call_succeeded(self) -> None:
-        """Réinitialise après succès"""
         if self.failures > 0:
             logger.info("✅ Circuit Breaker réinitialisé")
         self.failures = 0
         self.opened_at = None
 
     def is_open(self) -> bool:
-        """Vérifie si le circuit est ouvert"""
         if self.opened_at is None:
             return False
         if time.time() - self.opened_at > self.timeout:
-            logger.info("🔄 Circuit Breaker: Tentative de réouverture...")
             self.opened_at = None
             self.failures = 0
             return False
         return True
 
 
-# Instances globales
+def get_retry_session(
+    retries: int = 3,
+    backoff_factor: float = 0.5,
+    status_forcelist: tuple[int, ...] = (429, 500, 502, 503, 504),
+) -> requests.Session:
+    """Crée une session requests avec retry automatique."""
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+        allowed_methods=["POST", "GET"],
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount(
+        "http://",  # nosemgrep: python.lang.security.audit.insecure-transport.requests.request-session-with-http.request-session-with-http
+        adapter,
+    )
+    session.mount("https://", adapter)
+    return session
+
+
 _session = get_retry_session()
 _circuit_breaker = CircuitBreaker()
 

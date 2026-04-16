@@ -44,10 +44,6 @@ class Container:
 
     # --- Getters ---
     @property
-    def chat_service(self) -> ChatService:
-        return self._chat_service
-
-    @property
     def chat_completion(self) -> ChatCompletionUseCase:
         return self._chat_completion_use_case
 

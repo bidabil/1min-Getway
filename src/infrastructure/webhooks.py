@@ -390,14 +390,3 @@ class WebhookManager:
 
 # Global webhook manager instance
 webhook_manager = WebhookManager()
-
-
-def trigger_event(event: WebhookEvent, data: dict[str, Any]) -> None:
-    """
-    Convenience function to trigger a webhook event.
-
-    Args:
-        event: The event type
-        data: Event data
-    """
-    webhook_manager.trigger(event, data)

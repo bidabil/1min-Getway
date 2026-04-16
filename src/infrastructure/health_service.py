@@ -5,7 +5,6 @@ Provides comprehensive health checks for:
 - API connectivity (1min.ai)
 - Circuit breaker status
 - Configuration validation
-- Optional: Memcached connectivity
 """
 
 import logging
@@ -20,8 +19,6 @@ import requests
 from ..config import (
     APP_ENV,
     AVAILABLE_MODELS,
-    MEMCACHED_HOST,
-    MEMCACHED_PORT,
     ONE_MIN_AI_API_KEY,
     ONE_MIN_BASE_URL,
 )
@@ -209,11 +206,6 @@ def check_configuration() -> ComponentHealth:
     if not AVAILABLE_MODELS:
         issues.append("No models available")
 
-    # Check environment
-    if APP_ENV == "production":
-        # Additional production checks could go here
-        pass
-
     if issues:
         return ComponentHealth(
             name="configuration",
@@ -233,66 +225,14 @@ def check_configuration() -> ComponentHealth:
     )
 
 
-def check_memcached() -> ComponentHealth:
-    """
-    Check Memcached connectivity (optional).
-
-    Returns:
-        ComponentHealth with Memcached status.
-    """
-    try:
-        import socket
-
-        start_time = time.perf_counter()
-
-        # Try to connect to Memcached
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(2.0)
-        result = sock.connect_ex((MEMCACHED_HOST, MEMCACHED_PORT))
-        sock.close()
-
-        response_time = (time.perf_counter() - start_time) * 1000
-
-        if result == 0:
-            return ComponentHealth(
-                name="memcached",
-                status=HealthStatus.HEALTHY,
-                message="Memcached connection OK",
-                response_time_ms=response_time,
-                details={
-                    "host": MEMCACHED_HOST,
-                    "port": MEMCACHED_PORT,
-                },
-            )
-        else:
-            return ComponentHealth(
-                name="memcached",
-                status=HealthStatus.DEGRADED,
-                message="Memcached not reachable (rate limiting may be affected)",
-                details={
-                    "host": MEMCACHED_HOST,
-                    "port": MEMCACHED_PORT,
-                },
-            )
-
-    except Exception as e:
-        return ComponentHealth(
-            name="memcached",
-            status=HealthStatus.DEGRADED,
-            message=f"Memcached check error: {str(e)}",
-        )
-
-
 def perform_health_check(
     include_api: bool = True,
-    include_memcached: bool = True,
 ) -> HealthCheckResult:
     """
     Perform comprehensive health check.
 
     Args:
         include_api: Whether to check API connectivity.
-        include_memcached: Whether to check Memcached.
 
     Returns:
         HealthCheckResult with all component statuses.
@@ -308,10 +248,6 @@ def perform_health_check(
     # Optionally check API connectivity
     if include_api:
         components.append(check_api_connectivity())
-
-    # Optionally check Memcached
-    if include_memcached:
-        components.append(check_memcached())
 
     # Determine overall status
     statuses = [comp.status for comp in components]

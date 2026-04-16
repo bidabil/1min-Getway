@@ -26,11 +26,6 @@ filetype==1.2.0
 
 # --- Security & Rate Limiting ---
 slowapi==0.1.9
-limits[memcached]==5.8.0
-pymemcache==4.0.0
-
-# --- Logging ---
-coloredlogs==15.0.1
 
 # --- Environment ---
 python-dotenv==1.2.2
