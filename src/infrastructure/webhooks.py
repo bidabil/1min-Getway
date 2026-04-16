@@ -189,6 +189,20 @@ class WebhookManager:
             return True
         return False
 
+    def enable(self, name: str) -> bool:
+        """Enable a webhook."""
+        if name in self._webhooks:
+            self._webhooks[name].enabled = True
+            return True
+        return False
+
+    def disable(self, name: str) -> bool:
+        """Disable a webhook."""
+        if name in self._webhooks:
+            self._webhooks[name].enabled = False
+            return True
+        return False
+
     def trigger(self, event: WebhookEvent, data: dict[str, Any]) -> None:
         """
         Trigger a webhook event.

@@ -7,7 +7,6 @@ Tests cover:
 - WebhookPayload dataclass
 - WebhookDelivery dataclass
 - WebhookManager class
-- trigger_event function
 """
 
 import hashlib
@@ -24,7 +23,6 @@ from src.infrastructure.webhooks import (
     WebhookEvent,
     WebhookManager,
     WebhookPayload,
-    trigger_event,
     webhook_manager,
 )
 
@@ -463,20 +461,6 @@ class TestWebhookManager:
                 manager._delivery_history = manager._delivery_history[-manager._max_history :]
 
         assert len(manager._delivery_history) <= 5
-
-
-class TestTriggerEvent:
-    """Tests for trigger_event convenience function."""
-
-    @patch("src.infrastructure.webhooks.webhook_manager")
-    def test_trigger_event_calls_manager(self, mock_manager):
-        """Test that trigger_event calls the global manager."""
-        trigger_event(WebhookEvent.REQUEST_COMPLETED, {"key": "value"})
-
-        mock_manager.trigger.assert_called_once_with(
-            WebhookEvent.REQUEST_COMPLETED,
-            {"key": "value"},
-        )
 
 
 class TestGlobalWebhookManager:

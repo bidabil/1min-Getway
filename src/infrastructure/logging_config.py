@@ -8,6 +8,7 @@ like ELK Stack, Datadog, or Google Cloud Logging.
 import json
 import logging
 import sys
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -200,3 +201,49 @@ def get_logger(name: str) -> StructuredLogger:
         StructuredLogger instance.
     """
     return StructuredLogger(name)
+
+
+class RequestLogger:
+    """Context manager for logging HTTP requests with timing."""
+
+    def __init__(
+        self,
+        logger: StructuredLogger,
+        operation: str,
+        request_id: str | None = None,
+    ):
+        self.logger = logger
+        self.operation = operation
+        self.request_id = request_id
+        self.start_time: float | None = None
+        self.fields: dict[str, Any] = {}
+
+    def __enter__(self) -> "RequestLogger":
+        self.start_time = time.perf_counter()
+        self.logger.debug(f"Started: {self.operation}", request_id=self.request_id)
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        duration_ms = (time.perf_counter() - self.start_time) * 1000 if self.start_time else 0
+        if exc_type:
+            self.logger.error(
+                f"Failed: {self.operation}",
+                request_id=self.request_id,
+                duration_ms=round(duration_ms, 2),
+                error_type=exc_type.__name__,
+                error_message=str(exc_val),
+                **self.fields,
+            )
+        else:
+            self.logger.info(
+                f"Completed: {self.operation}",
+                request_id=self.request_id,
+                duration_ms=round(duration_ms, 2),
+                **self.fields,
+            )
+
+    def add_field(self, key: str, value: Any) -> None:
+        self.fields[key] = value
+
+    def add_fields(self, fields: dict[str, Any]) -> None:
+        self.fields.update(fields)

@@ -19,8 +19,8 @@ API_TIMEOUT = 30
 CONVERSATION_API_URL = "https://api.1min.ai/api/conversations"
 
 
-class _CircuitBreaker:
-    """Circuit breaker local à one_min_client."""
+class CircuitBreaker:
+    """Circuit breaker pour protéger l'infrastructure."""
 
     def __init__(self, failure_threshold: int = 5, timeout: int = 60) -> None:
         self.failure_threshold = failure_threshold
@@ -50,26 +50,31 @@ class _CircuitBreaker:
         return True
 
 
-def _make_session() -> requests.Session:
+def get_retry_session(
+    retries: int = 3,
+    backoff_factor: float = 0.5,
+    status_forcelist: tuple[int, ...] = (429, 500, 502, 503, 504),
+) -> requests.Session:
+    """Crée une session requests avec retry automatique."""
     session = requests.Session()
     retry = Retry(
-        total=3,
-        backoff_factor=0.5,
-        status_forcelist=(429, 500, 502, 503, 504),
+        total=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
         allowed_methods=["POST", "GET"],
         raise_on_status=False,
     )
     adapter = HTTPAdapter(max_retries=retry)
     session.mount(
-        "http://",  # nosemgrep
+        "http://",  # nosemgrep: python.lang.security.audit.insecure-transport.requests.request-session-with-http.request-session-with-http
         adapter,
     )
     session.mount("https://", adapter)
     return session
 
 
-_session = _make_session()
-_circuit_breaker = _CircuitBreaker()
+_session = get_retry_session()
+_circuit_breaker = CircuitBreaker()
 
 
 def _get_safe_payload(payload: dict[str, Any]) -> dict[str, Any]:

@@ -123,6 +123,38 @@ class ApiKeyRateLimiter:
         """Get rate limit config for an API key."""
         return self._custom_configs.get(api_key, self._default_config)
 
+    def set_custom_limit(
+        self,
+        api_key: str,
+        requests_per_minute: int | None = None,
+        requests_per_hour: int | None = None,
+        requests_per_day: int | None = None,
+    ) -> None:
+        """Set custom rate limits for a specific API key."""
+        default = self._default_config
+        config = RateLimitConfig(
+            requests_per_minute=requests_per_minute or default.requests_per_minute,
+            requests_per_hour=requests_per_hour or default.requests_per_hour,
+            requests_per_day=requests_per_day or default.requests_per_day,
+            enabled=True,
+        )
+        self._custom_configs[api_key] = config
+        logger.info(f"Custom rate limit set for API key: {self._hash_key(api_key)}")
+
+    def cleanup_expired(self) -> int:
+        """Remove expired records from the store. Returns number of records removed."""
+        now = time.time()
+        expired_keys = []
+        for key in self._store.get_all_keys():
+            record = self._store.get(key)
+            if record and now - record.day_start >= 86400:
+                expired_keys.append(key)
+        for key in expired_keys:
+            self._store.delete(key)
+        if expired_keys:
+            logger.info(f"Cleaned up {len(expired_keys)} expired rate limit records")
+        return len(expired_keys)
+
     def check_rate_limit(self, api_key: str) -> tuple[bool, dict[str, Any]]:
         """
         Check if an API key is within rate limits.
