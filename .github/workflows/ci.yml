@@ -145,6 +145,11 @@ jobs:
         run: ruff check . --output-format=github
       - name: Ruff Format
         run: ruff format --check --diff .
+      - name: Hadolint (Dockerfile lint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          ignore: DL3008,DL3013
 
   type-check:
     name: "Type Check"

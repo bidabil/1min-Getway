@@ -60,7 +60,7 @@ pre-commit run --all-files
 make test
 
 # Verify Docker build
-make docker-build
+make build
 ```
 
 ### Step 3: Configure Environment
@@ -267,7 +267,7 @@ git commit -m ":bug: fix(Core): resolve authentication issue"
 
 ```bash
 # Test locally
-make docker-build
+make build
 
 # Check secrets are configured
 # Settings → Secrets → DOCKER_USERNAME, DOCKER_PASSWORD
@@ -301,11 +301,9 @@ make format           # Format code
 make up               # Docker Compose up
 make down             # Docker Compose down
 make logs             # View logs
-make restart          # Restart services
 
 # Maintenance
 make clean            # Clean artifacts
-make update           # Update dependencies
 ```
 
 ---

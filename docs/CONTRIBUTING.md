@@ -100,16 +100,14 @@ fix bug                           # Missing gitmoji, scope, format
 | `:lock:` | `security` | Patch |
 | `:boom:` | breaking | Major (1.0.0 → 2.0.0) |
 | `:memo:` | `docs` | No release |
-| `:recycle:` | `refactor` | No release |
+| `:recycle:` | `refactor` | Patch |
 | `:wrench:` | `chore` | No release |
 
-### Interactive Commit
+### Commit Example
 
 ```bash
-make commit
+git commit -m ":sparkles: feat(Gateway): your description here"
 ```
-
-This guides you through creating a properly formatted commit.
 
 ---
 
@@ -222,16 +220,21 @@ pre-commit run --all-files
 ```
 1min-gateway/
 ├── src/
-│   ├── domain/           # Business logic, ports
+│   ├── domain/           # Business logic, models, ports
+│   │   └── services/     # Domain services
 │   ├── application/      # Use cases
-│   ├── infrastructure/   # Adapters, external services
-│   └── api/              # FastAPI routes
+│   ├── adapters/         # Interface adapters
+│   ├── infrastructure/   # External services (Memcached, etc.)
+│   │   └── adapters/
+│   └── api/              # FastAPI routes, schemas
 ├── tests/
 │   ├── test_domain/
 │   ├── test_application/
+│   ├── test_adapters/
 │   ├── test_infrastructure/
 │   └── test_integration/
 ├── docs/                 # Documentation
+├── deploy.sh             # Automated server deployment
 └── .github/              # CI/CD workflows
 ```
 

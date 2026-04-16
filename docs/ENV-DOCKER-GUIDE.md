@@ -19,11 +19,11 @@ Configuration guide for development and production environments.
 
 ```
 1min-gateway/
-├── .env.example          # Production template
-├── .env.local            # Development template
+├── .env.example          # Configuration template
 ├── .env                  # Your actual config (gitignored)
 ├── .dockerignore         # Docker build optimization
 ├── docker-compose.yml    # Container orchestration
+├── deploy.sh             # Automated server deployment script
 └── Dockerfile            # Image build instructions
 ```
 
@@ -53,29 +53,20 @@ DOCKER_USER=your-dockerhub-username
 DOCKER_TOKEN=dckr_pat_your-access-token
 ```
 
-### Development Template (`.env.local`)
+### Setup
 
 ```bash
-# === REQUIRED ===
-ONE_MIN_AI_API_KEY=sk-your-api-key-here
+cp .env.example .env
+nano .env  # Fill in your credentials
+```
 
-# === DEVELOPMENT SETTINGS ===
+For **development**, override these variables in your `.env`:
+
+```bash
 APP_ENV=development
 DEBUG=True
 LOG_LEVEL=DEBUG
 RATELIMIT_ENABLED=False
-```
-
-### Setup
-
-```bash
-# Production
-cp .env.example .env
-nano .env  # Fill in your credentials
-
-# Development
-cp .env.local .env
-nano .env  # Add your API key
 ```
 
 ### Security
@@ -87,6 +78,26 @@ chmod 600 .env
 # Verify gitignored
 grep "^\.env$" .gitignore
 ```
+
+---
+
+## 🚀 Server Deployment (deploy.sh)
+
+For deploying on a fresh server, use the automated deployment script:
+
+```bash
+# On the server — one command does everything
+curl -fsSL https://raw.githubusercontent.com/billelattafi/1min-gateway/main/deploy.sh | bash
+```
+
+The script handles:
+- Docker installation (if missing)
+- Interactive `.env` configuration (API key, models, CORS...)
+- Pull from Docker Hub + container start
+- Health check verification
+- Displays the public IP and client configuration
+
+> To re-deploy or update: run `bash deploy.sh` again — it stops the old container and pulls the latest image.
 
 ---
 
@@ -106,7 +117,7 @@ grep "^\.env$" .gitignore
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+  test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:5001/', timeout=5)"]
   interval: 30s
   timeout: 10s
   retries: 3
@@ -149,8 +160,7 @@ make logs
 # or: docker compose logs -f
 
 # Restart
-make restart
-# or: docker compose restart
+docker compose restart
 
 # Stop
 make down
@@ -160,7 +170,10 @@ make down
 docker ps  # Shows (healthy) or (unhealthy)
 
 # Force Watchtower update
-docker exec watchtower /watchtower --run-once
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower \
+  --run-once 1min-gateway
 ```
 
 ---
@@ -255,7 +268,7 @@ docker inspect 1min-gateway --format='{{json .State.Health}}' | jq
 docker logs 1min-gateway
 
 # Test endpoint manually
-curl http://localhost:5001/health
+curl http://localhost:5001/
 
 # Increase start_period if app is slow
 start_period: 60s  # Instead of 40s
@@ -328,4 +341,4 @@ docker system prune -af --volumes
 - [ ] `.env` in `.gitignore`
 - [ ] `docker compose up -d` works
 - [ ] All containers show `(healthy)`
-- [ ] `curl http://localhost:5001/health` returns 200
+- [ ] `curl http://localhost:5001/` returns `{"status":"ok",...}`

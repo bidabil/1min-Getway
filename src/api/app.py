@@ -3,6 +3,7 @@
 Application Factory FastAPI pour 1min-Gateway.
 """
 
+import asyncio
 import logging
 import os
 from collections.abc import AsyncGenerator
@@ -17,6 +18,9 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import Response
+from starlette.types import ASGIApp
 
 from ..config import (
     CORS_ORIGINS,
@@ -24,8 +28,35 @@ from ..config import (
     MEMCACHED_PORT,
     RATELIMIT_DEFAULT,
     RATELIMIT_ENABLED,
+    REQUEST_TIMEOUT,
 )
 from .routes import router
+
+
+class TimeoutMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware qui impose un timeout global sur chaque requête entrante.
+    Retourne 504 Gateway Timeout si la requête dépasse REQUEST_TIMEOUT secondes.
+    """
+
+    def __init__(self, app: ASGIApp, timeout: int = 120) -> None:
+        super().__init__(app)
+        self.timeout = timeout
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=self.timeout)
+        except TimeoutError:
+            return JSONResponse(
+                status_code=504,
+                content={
+                    "success": False,
+                    "error": {
+                        "code": "REQUEST_TIMEOUT",
+                        "message": f"Request exceeded the {self.timeout}s timeout.",
+                    },
+                },
+            )
 
 
 def check_memcached_connection(
@@ -153,6 +184,9 @@ def create_app() -> tuple[FastAPI, logging.Logger]:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
+
+    # Timeout middleware — limite la durée de chaque requête
+    app.add_middleware(TimeoutMiddleware, timeout=REQUEST_TIMEOUT)
 
     # Inclusion des routes
     app.include_router(router)

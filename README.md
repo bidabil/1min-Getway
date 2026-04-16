@@ -42,7 +42,17 @@ graph LR
 
 ## 🚀 Quick Start
 
-### Docker Compose (Recommended)
+### Automated Server Deployment (Recommended)
+
+One command on a fresh server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/billelattafi/1min-gateway/main/deploy.sh | bash
+```
+
+Handles Docker installation, interactive `.env` setup, pulls the image from Docker Hub, and verifies health.
+
+### Docker Compose
 
 ```bash
 # Clone the repository
@@ -57,12 +67,13 @@ nano .env  # Add your 1min.ai API Key
 make up
 ```
 
-### Docker Run
+### Docker Run (minimal)
 
 ```bash
 docker run -d --name 1min-gateway \
+  --restart unless-stopped \
   -p 5001:5001 \
-  -e ONE_MIN_AI_API_KEY=your_key_here \
+  --env-file .env \
   billelattafi/1min-gateway:latest
 ```
 

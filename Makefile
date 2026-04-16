@@ -41,6 +41,15 @@ security: ## 🔒 Scan de sécurité
 check: lint test ## ✅ Lint + Tests
 
 # --- DOCKER ---
+deploy: ## 🚀 Déploie sur un serveur distant (depuis le serveur)
+	bash deploy.sh
+
+monitoring-up: ## 📊 Lance Prometheus + Grafana
+	docker compose -f docker-compose.monitoring.yml up -d
+
+monitoring-down: ## ⏹️ Arrête Prometheus + Grafana
+	docker compose -f docker-compose.monitoring.yml down
+
 build: ## 🐳 Build l'image
 	docker build -t $(IMAGE):latest .
 
