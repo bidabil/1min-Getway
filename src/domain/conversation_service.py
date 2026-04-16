@@ -8,7 +8,7 @@ logger = logging.getLogger("1min-gateway.conversation-service")
 
 
 def format_conversation_history(
-    messages: list[dict[str, Any]],
+    _messages: list[dict[str, Any]],
     new_input: str | list[dict[str, Any]],
 ) -> str:
     """

@@ -84,29 +84,6 @@ class ApiKeyValidator:
             # Fail-open par sécurité
             return True, f"Validation error: {str(e)}"
 
-    def validate_format_only(self, api_key: str) -> tuple[bool, str | None]:
-        """
-        Validation rapide du format uniquement (sans appel API).
-        Utile pour un premier niveau de validation.
-        """
-        if not api_key:
-            return False, "Missing API key"
-
-        if len(api_key) < 32:
-            return False, "Invalid API key format (too short)"
-
-        if len(api_key) > 128:
-            return False, "Invalid API key format (too long)"
-
-        # Les clés 1min.ai sont généralement alphanumériques
-        # mais peuvent contenir des tirets et underscores
-        import re
-
-        if not re.match(r"^[a-zA-Z0-9_-]+$", api_key):
-            return False, "Invalid API key format (invalid characters)"
-
-        return True, None
-
 
 # Instance globale
 api_key_validator = ApiKeyValidator()

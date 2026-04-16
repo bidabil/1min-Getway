@@ -41,15 +41,13 @@ ONE_MIN_AI_API_KEY=sk-your-api-key-here
 APP_ENV=production
 DEBUG=False
 LOG_LEVEL=INFO
-SECRET_KEY=generate-a-secure-key
-
 # === RATE LIMITING ===
 RATELIMIT_ENABLED=True
 MEMCACHED_HOST=memcached
 MEMCACHED_PORT=11211
 
 # === DOCKER (for Watchtower) ===
-DOCKER_USER=your-dockerhub-username
+DOCKER_USERNAME=your-dockerhub-username
 DOCKER_TOKEN=dckr_pat_your-access-token
 ```
 
@@ -199,9 +197,6 @@ api_key = "sk-real-key"  # Use environment variables!
 # Use access tokens
 DOCKER_TOKEN=dckr_pat_AbCdEfGhIjKlMnOpQrStUvWxYz
 
-# Generate secure keys
-SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
-
 # Rotate secrets every 90 days
 ```
 
@@ -294,7 +289,7 @@ docker network inspect 1min-gateway-network
 docker logs watchtower
 
 # Verify Docker credentials
-echo $DOCKER_TOKEN | docker login -u $DOCKER_USER --password-stdin
+echo $DOCKER_TOKEN | docker login -u $DOCKER_USERNAME --password-stdin
 
 # Check label on container
 docker inspect 1min-gateway | grep watchtower

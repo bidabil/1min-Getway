@@ -131,4 +131,4 @@ make down       # Docker Compose down
 
 ---
 
-*Last updated: 2024*
+*Last updated: 2026*

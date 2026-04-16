@@ -149,6 +149,8 @@ yarn.lock
 .eslintrc*
 .prettierrc*
 .stylelintrc*
+plans/
+monitoring/
 
 # ============================================================
 # EXCEPTIONS (fichiers à GARDER dans le build)

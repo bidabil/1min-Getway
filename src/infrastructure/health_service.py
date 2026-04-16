@@ -209,11 +209,6 @@ def check_configuration() -> ComponentHealth:
     if not AVAILABLE_MODELS:
         issues.append("No models available")
 
-    # Check environment
-    if APP_ENV == "production":
-        # Additional production checks could go here
-        pass
-
     if issues:
         return ComponentHealth(
             name="configuration",

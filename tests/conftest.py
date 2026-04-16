@@ -264,12 +264,6 @@ def mock_1min_streaming_lines() -> list[bytes]:
     ]
 
 
-@pytest.fixture
-def mock_1min_error_response() -> dict[str, Any]:
-    """Réponse d'erreur de l'API 1min.ai."""
-    return {"errorCode": "HTTP_EXCEPTION", "message": "Something went wrong"}
-
-
 # ============================================================================
 # FIXTURES: HTTP Mocks
 # ============================================================================
@@ -299,14 +293,6 @@ def mock_http_streaming_response(mock_1min_streaming_lines):
 def mock_requests_post(mock_http_response):
     """Mock requests.post global."""
     with patch("requests.post") as mock:
-        mock.return_value = mock_http_response
-        yield mock
-
-
-@pytest.fixture
-def mock_routes_requests_post(mock_http_response):
-    """Mock requests.post dans routes.py."""
-    with patch("src.routes.requests.post") as mock:
         mock.return_value = mock_http_response
         yield mock
 

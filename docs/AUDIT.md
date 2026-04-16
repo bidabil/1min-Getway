@@ -61,7 +61,6 @@
 - `main.py` utilise désormais `APP_HOST`, `APP_PORT`, `WORKERS` depuis config
 - `model_cache.py` utilise `MODEL_CACHE_TTL` configurable
 - Timeout middleware global ajouté (`REQUEST_TIMEOUT`)
-- `SECRET_KEY` : erreur bloquante en production si valeur par défaut
 
 ---
 

@@ -135,21 +135,6 @@ curl http://localhost:5001/v1/chat/completions \
 
 ---
 
-### Image Generation (via chat)
-
-Pass `content_type: IMAGE_GENERATOR` in the request:
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `n` | integer | Number of images `1–4` |
-| `size` | string | `"1024x1024"`, `"512x512"`, `"256x256"` |
-| `aspect_ratio` | string | `"1:1"`, `"16:9"`, `"9:16"`, `"4:3"` |
-| `output_format` | string | `"webp"`, `"png"`, `"jpg"` |
-| `style` | string | e.g. `"anime"`, `"photorealistic"` |
-| `negative_prompt` | string | What to exclude from the image |
-
----
-
 ## 🏥 Health Endpoints
 
 ### Basic Health Check
@@ -266,6 +251,53 @@ POST /rate-limit/reset/{api_key}
 ```
 
 Resets rate limit counters for a specific API key.
+
+---
+
+## 🔔 Webhooks
+
+### List Webhooks
+
+```
+GET /webhooks
+```
+
+Returns all registered webhook endpoints.
+
+### Register Webhook
+
+```
+POST /webhooks/register
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Unique name for the webhook |
+| `url` | string | Yes | Endpoint URL to deliver events to |
+| `secret` | string | Yes | Secret for HMAC signature verification |
+| `events` | array | No | List of event types to subscribe to (default: all) |
+
+### Unregister Webhook
+
+```
+DELETE /webhooks/{name}
+```
+
+### Webhook Delivery History
+
+```
+GET /webhooks/history
+```
+
+Returns the last 20 delivery attempts.
+
+### Webhook Statistics
+
+```
+GET /webhooks/stats
+```
+
+Returns total sent, successful, failed, and retry counts.
 
 ---
 

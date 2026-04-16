@@ -203,34 +203,6 @@ jobs:
           gh pr comment "$PR_URL" \
             --body "This Dependabot PR has an unrecognized update type (\`$UPDATE_TYPE\`) and was not auto-merged. Please review manually."
 
-  # ============================================================
-  # JOB 3: Notification & Summary
-  # ============================================================
-  notify:
-    needs: [check-dependabot, auto-merge]
-    runs-on: ubuntu-latest
-    if: always() && github.actor == 'dependabot[bot]'
-    timeout-minutes: 5
-
-    steps:
-      - name: Summary
-        env:
-          AUTO_MERGE_RESULT: ${{ needs.auto-merge.result }}
-          UPDATE_TYPE:       ${{ needs.check-dependabot.outputs.update-type }}
-          DEPENDENCY_TYPE:   ${{ needs.check-dependabot.outputs.dependency-type }}
-          PR_URL:            ${{ github.event.pull_request.html_url }}
-        run: |
-          if [[ "$AUTO_MERGE_RESULT" == "success" ]]; then
-            echo "Dependabot PR processed successfully"
-          elif [[ "$AUTO_MERGE_RESULT" == "failure" ]]; then
-            echo "Dependabot PR processing failed"
-          else
-            echo "Dependabot PR requires manual review"
-          fi
-          echo "PR:              $PR_URL"
-          echo "Update type:     $UPDATE_TYPE"
-          echo "Dependency type: $DEPENDENCY_TYPE"
-
 # ============================================================
 # CONFIGURATION REQUISE
 # ============================================================

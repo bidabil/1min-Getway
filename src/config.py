@@ -71,11 +71,7 @@ AVAILABLE_MODELS: Final[list[str]] = (
 # RATE LIMITING (selon documentation : 180 req/min par défaut)
 # ============================================================================
 RATELIMIT_ENABLED: Final[bool] = os.getenv("RATELIMIT_ENABLED", "True").lower() == "true"
-RATELIMIT_STORAGE_URL: Final[str] = os.getenv(
-    "RATELIMIT_STORAGE_URL", f"memcached://{MEMCACHED_HOST}:{MEMCACHED_PORT}"
-)
 RATELIMIT_DEFAULT: Final[str] = os.getenv("RATELIMIT_DEFAULT", "180 per minute")
-RATELIMIT_MODELS_LIST: Final[str] = os.getenv("RATELIMIT_MODELS_LIST", "180 per minute")
 
 # ============================================================================
 # CACHE
@@ -86,7 +82,6 @@ MODEL_CACHE_TTL: Final[int] = int(os.getenv("MODEL_CACHE_TTL", "300"))
 # LOGGING
 # ============================================================================
 LOG_LEVEL: Final[str] = os.getenv("LOG_LEVEL", "INFO").upper()
-LOG_FILE: Final[str] = os.getenv("LOG_FILE", "/app/logs/gateway.log")
 
 # ============================================================================
 # SÉCURITÉ

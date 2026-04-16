@@ -4,10 +4,8 @@ Network service for handling HTTP requests and responses.
 
 import logging
 import uuid
-from typing import Any
 
 from fastapi import Response
-from fastapi.responses import JSONResponse
 
 from ..config import CORS_ORIGINS
 
@@ -57,19 +55,3 @@ def set_response_headers(response: Response) -> Response:
     response.headers["Access-Control-Expose-Headers"] = "X-Request-ID"
 
     return response
-
-
-def create_json_response(content: dict[str, Any], status_code: int = 200) -> JSONResponse:
-    """
-    Create a JSON response with standard headers.
-    """
-    headers: dict[str, str] = {
-        "Content-Type": "application/json",
-        "X-Request-ID": str(uuid.uuid4()),
-        "Access-Control-Expose-Headers": "X-Request-ID",
-    }
-    # Only add CORS header if configured
-    cors_origin = _get_cors_origin()
-    if cors_origin:
-        headers["Access-Control-Allow-Origin"] = cors_origin
-    return JSONResponse(content=content, status_code=status_code, headers=headers)
