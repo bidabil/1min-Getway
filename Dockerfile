@@ -50,10 +50,9 @@ WORKDIR /app
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip to fix CVE-2025-8869 (symlink extraction vulnerability)
-RUN pip install --upgrade pip>=25.3
-# Créer un utilisateur non-root AVANT de copier les fichiers
-RUN useradd --create-home --shell /bin/bash appuser
+# Upgrade pip (CVE-2025-8869) and create non-root user
+RUN pip install --no-cache-dir --upgrade "pip>=25.3" \
+    && useradd --create-home --shell /bin/bash appuser
 
 # Copier les dépendances depuis le builder
 COPY --from=builder /root/.local /home/appuser/.local

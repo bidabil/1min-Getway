@@ -3,8 +3,9 @@
 Tests d'intégration pour les endpoints API FastAPI.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 
@@ -156,15 +157,25 @@ class TestChatCompletionsEndpoint:
     def test_propagates_upstream_errors(
         self, client, auth_headers, simple_chat_request, upstream_status, expected_status
     ):
-        # Ce test nécessite un mock plus complexe pour FastAPI
-        # On vérifie juste que l'endpoint répond correctement sans mock
-        response = client.post(
-            "/v1/chat/completions",
-            json=simple_chat_request,
-            headers=auth_headers,
+        mock_response = MagicMock()
+        mock_response.status_code = upstream_status
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "upstream error", request=MagicMock(), response=mock_response
         )
-        # Sans mock, on s'attend à une erreur de connexion, circuit breaker, ou erreur API
-        assert response.status_code in [400, 500, 503, 504, 200]
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+
+        with patch("src.api.routes.httpx.AsyncClient") as mock_async_client:
+            mock_async_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_async_client.return_value.__aexit__ = AsyncMock(return_value=False)
+            response = client.post(
+                "/v1/chat/completions",
+                json=simple_chat_request,
+                headers=auth_headers,
+            )
+
+        assert response.status_code == expected_status
 
 
 class TestCircuitBreakerEndpoints:

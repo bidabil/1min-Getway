@@ -18,8 +18,9 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
+from starlette.types import ASGIApp
 
 from ..config import (
     CORS_ORIGINS,
@@ -38,11 +39,11 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
     Retourne 504 Gateway Timeout si la requête dépasse REQUEST_TIMEOUT secondes.
     """
 
-    def __init__(self, app: FastAPI, timeout: int = 120) -> None:
+    def __init__(self, app: ASGIApp, timeout: int = 120) -> None:
         super().__init__(app)
         self.timeout = timeout
 
-    async def dispatch(self, request: Request, call_next: object) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         try:
             return await asyncio.wait_for(call_next(request), timeout=self.timeout)
         except TimeoutError:
