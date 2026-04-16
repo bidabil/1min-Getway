@@ -336,4 +336,43 @@ Ne charge pas d'autres fichiers. Liste chaque problème avec le fichier et la li
 |------|------|--------|--------|
 | 2026-04-16 | P2 | Suppression `SECRET_KEY` inutilisée | `4590c1c` |
 | 2026-04-16 | I5/I6 | `SECRET_KEY` retirée de `ci.yml` et `deploy.sh` | `4590c1c` |
-| 2026-04-16 | Toutes | Audit complet 13 zones — résultats consolidés | _(ce commit)_ |
+| 2026-04-16 | Toutes | Audit complet 13 zones — résultats consolidés | `f47680a` |
+| 2026-04-16 | Toutes | **Corrections audit complet** — 5 supprimés, -1446 lignes | `1697670` |
+
+### Détail du commit de corrections `1697670`
+
+| Zone | Action | Fichiers |
+|------|--------|---------|
+| P3 | Supprimé `image_mapper.py` (fichier entier mort) | `src/domain/image_mapper.py` |
+| P4 | Rendu privés `CircuitBreaker`/`get_retry_session` (internal only) | `src/infrastructure/one_min_client.py` |
+| P4 | Supprimé `validate_format_only()` | `src/infrastructure/api_key_validator.py` |
+| P4 | Supprimé `create_json_response()` | `src/infrastructure/network_service.py` |
+| P4 | Supprimé `RequestLogger` class | `src/infrastructure/logging_config.py` |
+| P4 | Supprimé `set_custom_limit()`, `cleanup_expired()` | `src/infrastructure/rate_limiter.py` |
+| P5 | Supprimé 5 fonctions wrapper mortes (`track_request`, `timed`, etc.) | `src/infrastructure/metrics.py` |
+| P5 | Supprimé `trigger_event()`, `enable()`, `disable()` | `src/infrastructure/webhooks.py` |
+| P6 | Supprimé `src/adapters/openai_adapter.py` (fichier entier) | `src/adapters/openai_adapter.py` |
+| P6 | Supprimé `printedcolors.py` (fichier entier) | `printedcolors.py` |
+| P6 | Supprimé propriété `Container.chat_service` | `src/container.py` |
+| P6 | Supprimé bloc `if APP_ENV == "production": pass` | `src/infrastructure/health_service.py` |
+| P6 | Nettoyé exports morts | `src/__init__.py` |
+| P2 | Supprimé `RATELIMIT_STORAGE_URL`, `RATELIMIT_MODELS_LIST`, `LOG_FILE` | `src/config.py` |
+| P7 | Supprimé `conftest_fastapi.py` (doublon) | `tests/conftest_fastapi.py` |
+| P7 | Supprimé 2 fixtures mortes | `tests/conftest.py` |
+| P7 | Supprimé tests de l'adapter supprimé | `tests/test_adapters/test_openai_adapter.py` |
+| I1 | Supprimé ENV redondants builder, ajouté `plans/` `monitoring/` au .dockerignore | `Dockerfile`, `.dockerignore` |
+| I2 | Supprimé `RUFF_VERSION` non consommé | `.github/workflows/ci-security.yml` |
+| I3 | Supprimé job `notify` (logs only) | `.github/workflows/dependabot-auto-merge.yml` |
+| I5 | Retiré `limits[memcached]`, `pymemcache`, `coloredlogs` | `requirements.txt` |
+| I5 | Ajouté `pytest-timeout`, `pytest-benchmark`, `pytest-randomly` | `requirements-dev.txt` |
+| I5 | Supprimé sections `black`/`isort`/`bandit` | `pyproject.toml` |
+| I5 | Réécrit `.env.example` aligné sur `config.py` | `.env.example` |
+| I6 | Retiré Image Generation (non implémentée), ajouté Webhooks | `docs/API_PARAMETERS.md` |
+| I6 | Corrigé `DOCKER_USER`→`DOCKER_USERNAME`, retiré `SECRET_KEY` | `docs/ENV-DOCKER-GUIDE.md` |
+| I6 | Retiré référence `SECRET_KEY` | `docs/AUDIT.md` |
+| I6 | Mis à jour `Last updated: 2024`→`2026` | `docs/index.md` |
+
+**Faux positifs identifiés pendant la correction :**
+- `params` dans `_resolve_session_id()` — utilisé dans le corps (ligne `params.get("file_ids")`)
+- `CircuitBreaker`/`_session`/`time` dans `one_min_client.py` — utilisés par `create_1min_conversation()` (appelée via adapter)
+- `Mock` dans `test_openai_adapter.py` — utilisé 16× (mais le fichier a été supprimé avec le module testé)
