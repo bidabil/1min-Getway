@@ -91,7 +91,6 @@ LOG_FILE: Final[str] = os.getenv("LOG_FILE", "/app/logs/gateway.log")
 # ============================================================================
 # SÉCURITÉ
 # ============================================================================
-SECRET_KEY: Final[str] = os.getenv("SECRET_KEY", "CHANGE_ME_IN_PRODUCTION")
 # Default to empty string for security - must be explicitly configured
 # Use CORS_ORIGINS="*" only for development, never in production
 CORS_ORIGINS: Final[str] = os.getenv("CORS_ORIGINS", "")
@@ -113,11 +112,6 @@ def validate_config() -> None:
 
     # Vérification de la sécurité en production
     if APP_ENV == "production":
-        if SECRET_KEY in ("CHANGE_ME_IN_PRODUCTION", "change_me_to_a_random_secret_key", ""):
-            errors.append(
-                "❌ SECRET_KEY non configurée. "
-                'Générez une clé avec: python -c "import secrets; print(secrets.token_hex(32))"'
-            )
         if DEBUG:
             logger.warning("⚠️ DEBUG=True en production - Non recommandé")
         if CORS_ORIGINS == "*":
