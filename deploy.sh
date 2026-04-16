@@ -106,7 +106,6 @@ ONE_MIN_CONVERSATION_API_STREAMING_URL=https://api.1min.ai/api/features/stream
 ONE_MIN_ASSET_URL=https://api.1min.ai/api/assets
 
 # Sécurité
-SECRET_KEY=${secret_key}
 DEBUG=False
 CORS_ORIGINS=${cors_origins}
 CORS_ALLOW_CREDENTIALS=True

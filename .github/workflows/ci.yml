@@ -196,7 +196,6 @@ jobs:
           - { python-version: "3.12", os: windows-latest, coverage: false, benchmark: false }
     env:
       ONE_MIN_AI_API_KEY: "test-api-key-ci"      # pragma: allowlist secret
-      SECRET_KEY: "test-secret-key-ci-only"      # pragma: allowlist secret
       APP_ENV: "testing"
       DEBUG: "True"
       RATELIMIT_ENABLED: "False"
