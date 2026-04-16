@@ -1,7 +1,7 @@
 # ============================================================
 # Docker Compose - 1min-Gateway Production Setup
 # ============================================================
-# Architecture: Gateway + Memcached + Watchtower
+# Architecture: Gateway + Watchtower
 # Network: Bridge isolé pour sécurité
 # ============================================================
 
@@ -56,44 +56,6 @@ services:
           memory: 64M
 
   # ============================================================
-  # MEMCACHED - Cache en mémoire pour rate limiting
-  # ============================================================
-  memcached:
-    image: memcached:1.6-alpine  # Version pinnée
-    container_name: 1min-gateway-cache
-
-    # Commande avec options optimisées
-    command:
-      - "memcached"
-      - "-m 64"              # Limite mémoire: 64 MB
-      - "-c 1024"            # Max connections: 1024
-      - "-I 4m"              # Max item size: 4 MB
-      - "-v"                 # Verbose logging
-
-    restart: unless-stopped
-
-    networks:
-      - 1min-gateway-network
-
-    # Healthcheck
-    healthcheck:
-      test: ["CMD", "sh", "-c", "echo stats | nc localhost 11211"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 128M
-        reservations:
-          cpus: '0.25'
-          memory: 64M
-
-  # ============================================================
   # 1MIN-GATEWAY - Service principal
   # ============================================================
   1min-gateway:
@@ -109,11 +71,6 @@ services:
     ports:
       - "5001:5001"
 
-    # Dépendances (attend que memcached soit healthy)
-    depends_on:
-      memcached:
-        condition: service_healthy
-
     # Réseau
     networks:
       - 1min-gateway-network
@@ -126,10 +83,6 @@ services:
       # Override des variables si nécessaire
       - SUBSET_OF_ONE_MIN_PERMITTED_MODELS=${SUBSET_OF_ONE_MIN_PERMITTED_MODELS:-mistral-nemo,gpt-4o-mini,deepseek-chat}
       - PERMIT_MODELS_FROM_SUBSET_ONLY=${PERMIT_MODELS_FROM_SUBSET_ONLY:-False}
-
-      # Configuration memcached
-      - MEMCACHED_HOST=memcached
-      - MEMCACHED_PORT=11211
 
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

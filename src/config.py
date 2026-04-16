@@ -44,12 +44,6 @@ WORKERS: Final[int] = int(os.getenv("WORKERS", "1"))
 REQUEST_TIMEOUT: Final[int] = int(os.getenv("REQUEST_TIMEOUT", "120"))
 
 # ============================================================================
-# MEMCACHED
-# ============================================================================
-MEMCACHED_HOST: Final[str] = os.getenv("MEMCACHED_HOST", "memcached")
-MEMCACHED_PORT: Final[int] = int(os.getenv("MEMCACHED_PORT", "11211"))
-
-# ============================================================================
 # MODÈLES DISPONIBLES
 # ============================================================================
 PERMIT_MODELS_FROM_SUBSET_ONLY: Final[bool] = (

@@ -10,7 +10,6 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
-import coloredlogs
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -24,8 +23,6 @@ from starlette.types import ASGIApp
 
 from ..config import (
     CORS_ORIGINS,
-    MEMCACHED_HOST,
-    MEMCACHED_PORT,
     RATELIMIT_DEFAULT,
     RATELIMIT_ENABLED,
     REQUEST_TIMEOUT,
@@ -59,25 +56,6 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
             )
 
 
-def check_memcached_connection(
-    host: str | None = None,
-    port: int | None = None,
-) -> bool:
-    """Vérifie la disponibilité de Memcached."""
-    from pymemcache.client.base import Client
-
-    effective_host: str = host or MEMCACHED_HOST
-    effective_port: int = port or MEMCACHED_PORT
-
-    try:
-        client = Client((effective_host, effective_port), connect_timeout=2, timeout=2)
-        client.set("health_check", "ok")
-        result = client.get("health_check")
-        return bool(result == b"ok")
-    except Exception:
-        return False
-
-
 def setup_logging() -> logging.Logger:
     """Configure le logging."""
     logger = logging.getLogger("1min-gateway")
@@ -86,12 +64,13 @@ def setup_logging() -> logging.Logger:
     if not os.path.exists("logs"):
         os.makedirs("logs")
 
-    coloredlogs.install(
-        level="DEBUG",
-        logger=logger,
-        fmt="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S",
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
     )
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
 
     file_handler = RotatingFileHandler(
         "logs/api.log",
@@ -124,12 +103,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Gestion du cycle de vie de l'application."""
     logger = logging.getLogger("1min-gateway")
     logger.info("🚀 Démarrage de l'application FastAPI")
-
-    # Vérification Memcached
-    if check_memcached_connection():
-        logger.info("LIMITER | Backend: Memcached (Distribué) ✅")
-    else:
-        logger.warning("LIMITER | Memcached indisponible. Backend: IN-MEMORY ⚠️")
 
     yield
 
