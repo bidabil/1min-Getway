@@ -229,5 +229,7 @@ class ModelCache:
         }
 
 
-# Global model cache instance
-model_cache = ModelCache(ttl_seconds=300)  # 5 minutes default TTL
+# Global model cache instance — TTL configurable via MODEL_CACHE_TTL env var
+from ..config import MODEL_CACHE_TTL  # noqa: E402
+
+model_cache = ModelCache(ttl_seconds=MODEL_CACHE_TTL)

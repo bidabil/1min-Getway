@@ -202,7 +202,7 @@ jobs:
       contents: read
       packages: read
     outputs:
-      deployed: ${{ steps.deploy.outputs.deployed }}
+      deployed: ${{ steps.record.outputs.deployed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -229,17 +229,85 @@ jobs:
             "$IMAGE_REF"
           echo "Cosign signature verified for $IMAGE_REF" >> $GITHUB_STEP_SUMMARY
 
-      - name: Deploy to Production
+      - name: Deploy to Production via SSH
         id: deploy
         env:
-          IMAGE_DIGEST: ${{ needs.validate.outputs.image_ref }}
+          IMAGE_REF: ${{ needs.validate.outputs.image_ref }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          DEPLOYED_BY: ${{ github.actor }}
+          SKIP_CHECK: ${{ github.event.inputs.skip_staging_check }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PRODUCTION_SSH_HOST }}
+          username: ${{ secrets.PRODUCTION_SSH_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          port: ${{ secrets.PRODUCTION_SSH_PORT || 22 }}
+          envs: IMAGE_REF,VERSION,DEPLOYED_BY
+          script: |
+            set -euo pipefail
+
+            DEPLOY_DIR="${HOME}/1min-gateway"
+            CONTAINER_NAME="1min-gateway"
+
+            echo "=== Deploying 1min-Gateway v${VERSION} ==="
+            echo "Image: ${IMAGE_REF}"
+
+            # Pull the new image
+            docker pull "${IMAGE_REF}"
+
+            # Tag it as latest locally for docker compose
+            docker tag "${IMAGE_REF}" "billelattafi/1min-gateway:latest"
+
+            # Graceful restart: stop old container, start new one
+            if [ -f "${DEPLOY_DIR}/docker-compose.yml" ]; then
+              cd "${DEPLOY_DIR}"
+              docker compose pull 1min-gateway
+              docker compose up -d --no-deps --force-recreate 1min-gateway
+            else
+              # Fallback: plain docker run
+              docker stop "${CONTAINER_NAME}" 2>/dev/null || true
+              docker rm   "${CONTAINER_NAME}" 2>/dev/null || true
+              docker run -d \
+                --name "${CONTAINER_NAME}" \
+                --restart unless-stopped \
+                -p 5001:5001 \
+                --env-file "${DEPLOY_DIR}/.env" \
+                -v "${DEPLOY_DIR}/logs:/app/logs" \
+                "${IMAGE_REF}"
+            fi
+
+            # Wait for container to be healthy (max 60s)
+            echo "Waiting for health check..."
+            for i in $(seq 1 12); do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' "${CONTAINER_NAME}" 2>/dev/null || echo "unknown")
+              if [ "$STATUS" = "healthy" ]; then
+                echo "Container is healthy"
+                break
+              fi
+              if [ "$i" -eq 12 ]; then
+                echo "ERROR: Container did not become healthy in time"
+                docker logs "${CONTAINER_NAME}" --tail 30
+                exit 1
+              fi
+              echo "Attempt $i — status: $STATUS, retrying in 5s..."
+              sleep 5
+            done
+
+            # Clean up old images
+            docker image prune -f
+
+            echo "Deployment complete: v${VERSION} deployed by ${DEPLOYED_BY}"
+
+      - name: Record Deployment
+        id: record
+        env:
           VERSION: ${{ needs.validate.outputs.version }}
           DEPLOYED_BY: ${{ github.actor }}
           SKIP_CHECK: ${{ github.event.inputs.skip_staging_check }}
         run: |
           echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image**: \`$IMAGE_DIGEST\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image**: \`${{ needs.validate.outputs.image_ref }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Deployed By**: $DEPLOYED_BY" >> $GITHUB_STEP_SUMMARY
           echo "**Deployment Time**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
@@ -247,25 +315,15 @@ jobs:
 
           if [[ "$SKIP_CHECK" == "true" ]]; then
             echo "**WARNING**: Staging validation was skipped!" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
           else
             echo "Staging validation passed" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Deployment Method" >> $GITHUB_STEP_SUMMARY
-          echo "- kubectl (à remplacer par GitOps ArgoCD/Flux quand le déploiement réel sera implémenté)" >> $GITHUB_STEP_SUMMARY
-          echo "- Environment: production" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # TODO: Ajouter ici la commande de déploiement réel
-          # Exemple avec kubectl:
-          # kubectl set image deployment/1min-gateway app=${{ needs.validate.outputs.image_ref }} -n production
-          # kubectl rollout status deployment/1min-gateway -n production --timeout=600s
+          echo "**Deployment Method**: Docker Compose via SSH" >> $GITHUB_STEP_SUMMARY
+          echo "**Host**: ${{ secrets.PRODUCTION_SSH_HOST }}" >> $GITHUB_STEP_SUMMARY
 
           echo "deployed=true" >> $GITHUB_OUTPUT
-
-          echo "Production deployment triggered" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================
   # STAGE 4: PRODUCTION SMOKE TESTS
@@ -392,8 +450,9 @@ jobs:
           echo "**Deployed Version**: ${{ needs.validate.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Image**: ${{ needs.validate.outputs.image_ref }}" >> $GITHUB_STEP_SUMMARY
 
-          # TODO: Ajouter commande de rollback automatique si nécessaire
-          # kubectl rollout undo deployment/1min-gateway -n production
+          # Rollback automatique via SSH
+          # appleboy/ssh-action pour rollback si nécessaire :
+          # docker stop 1min-gateway && docker run ... image_précédente
 
           echo "::error::Production deployment failed smoke tests - manual intervention required"
 

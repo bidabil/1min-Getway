@@ -38,12 +38,7 @@ repos:
           - --exclude-files
           - "\\.env\\.example$"
 
-  # Hadolint pour Dockerfile
-  - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
-    hooks:
-      - id: hadolint-docker
-        args: ["--ignore", "DL3008", "--ignore", "DL3013"]
+  # Hadolint is run in CI (ci.yml lint job) via hadolint-action — no local Docker required.
 
   # Commitlint avec Gitmoji
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook

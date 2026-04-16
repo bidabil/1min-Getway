@@ -75,4 +75,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 EXPOSE 5001
 
 # Utiliser uvicorn pour FastAPI
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5001", "--workers", "1"]
+# PORT et WORKERS sont configurables via variables d'environnement
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-5001} --workers ${WORKERS:-1}"]

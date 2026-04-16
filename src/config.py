@@ -40,6 +40,8 @@ APP_ENV: Final[str] = os.getenv("APP_ENV", "production")
 DEBUG: Final[bool] = os.getenv("DEBUG", "False").lower() == "true"
 APP_HOST: Final[str] = os.getenv("HOST", "0.0.0.0")
 APP_PORT: Final[int] = int(os.getenv("PORT", "5001"))
+WORKERS: Final[int] = int(os.getenv("WORKERS", "1"))
+REQUEST_TIMEOUT: Final[int] = int(os.getenv("REQUEST_TIMEOUT", "120"))
 
 # ============================================================================
 # MEMCACHED
@@ -76,6 +78,11 @@ RATELIMIT_DEFAULT: Final[str] = os.getenv("RATELIMIT_DEFAULT", "180 per minute")
 RATELIMIT_MODELS_LIST: Final[str] = os.getenv("RATELIMIT_MODELS_LIST", "180 per minute")
 
 # ============================================================================
+# CACHE
+# ============================================================================
+MODEL_CACHE_TTL: Final[int] = int(os.getenv("MODEL_CACHE_TTL", "300"))
+
+# ============================================================================
 # LOGGING
 # ============================================================================
 LOG_LEVEL: Final[str] = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -106,8 +113,11 @@ def validate_config() -> None:
 
     # Vérification de la sécurité en production
     if APP_ENV == "production":
-        if SECRET_KEY == "CHANGE_ME_IN_PRODUCTION":
-            errors.append("❌ SECRET_KEY doit être changée en production")
+        if SECRET_KEY in ("CHANGE_ME_IN_PRODUCTION", "change_me_to_a_random_secret_key", ""):
+            errors.append(
+                "❌ SECRET_KEY non configurée. "
+                'Générez une clé avec: python -c "import secrets; print(secrets.token_hex(32))"'
+            )
         if DEBUG:
             logger.warning("⚠️ DEBUG=True en production - Non recommandé")
         if CORS_ORIGINS == "*":

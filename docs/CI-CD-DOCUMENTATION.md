@@ -41,8 +41,7 @@ graph TD
     E --> F{New Release?}
     F -->|Yes| G[Security Scan]
     F -->|No| H[Skip Build]
-    G -->|Pass| I[Multi-arch Build]
-    G -->|Fail| J[❌ Block]
+    G --> I[Multi-arch Build]
     I --> K[Sign Images]
     K --> L[Notify]
 ```
@@ -83,13 +82,26 @@ repository/
 {
   "branches": ["main"],
   "plugins": [
-    "semantic-release-gitmoji",
-    "@semantic-release/changelog",
-    "@semantic-release/git",
-    "@semantic-release/github"
+    ["@semantic-release/commit-analyzer", {
+      "preset": "conventionalcommits",
+      "releaseRules": [
+        {"type": "feat",     "release": "minor"},
+        {"type": "fix",      "release": "patch"},
+        {"type": "perf",     "release": "patch"},
+        {"type": "refactor", "release": "patch"},
+        {"type": "docs",     "release": false},
+        {"type": "chore",    "release": false}
+      ]
+    }],
+    ["@semantic-release/release-notes-generator", {"preset": "conventionalcommits"}],
+    ["@semantic-release/changelog", {"changelogFile": "CHANGELOG.md"}],
+    ["@semantic-release/github"],
+    ["@semantic-release/git", {"assets": ["CHANGELOG.md"]}]
   ]
 }
 ```
+
+> Note: The parser supports gitmoji prefixes in commit messages (e.g. `:sparkles: feat(Core): ...`) — the emoji is stripped and the conventional commit type is used for versioning.
 
 ---
 
@@ -104,7 +116,7 @@ repository/
 | `:zap:` | perf | Patch | `:zap: perf(Core): optimize query` |
 | `:boom:` | breaking | Major | `:boom: feat(API): breaking change` |
 | `:memo:` | docs | None | `:memo: docs: update README` |
-| `:recycle:` | refactor | None | `:recycle: refactor(Core): cleanup` |
+| `:recycle:` | refactor | Patch | `:recycle: refactor(Core): cleanup` |
 
 ### Workflow Scenarios
 
@@ -147,8 +159,8 @@ cosign verify \
 
 ### Vulnerability Scanning
 
-Trivy scans run **before** publishing:
-- ❌ Blocks on CRITICAL/HIGH vulnerabilities
+Trivy and Grype scans run **before** publishing:
+- ⚠️ Advisory-only — scan results are reported but do not block the build (to avoid cross-DB false positives)
 - 📊 Results uploaded to GitHub Security tab
 
 View results: **Repository → Security → Code scanning alerts**
@@ -181,13 +193,14 @@ Add cleanup step:
   run: docker system prune -af --volumes
 ```
 
-### Trivy Blocks Build
+### Reviewing Vulnerability Scan Results
+
+Scans are advisory-only and do not block the build. To review findings:
 
 1. Check **Security → Code scanning** for details
-2. Update base image in Dockerfile:
+2. Update base image in Dockerfile if needed:
    ```dockerfile
-   # Use slim variant with security patches
-   FROM python:3.12-slim-bookworm
+   FROM python:3.12-slim
    ```
 
 ### No Release Created

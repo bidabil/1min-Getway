@@ -9,6 +9,7 @@ import socket
 import uvicorn
 
 from src.api.app import create_app
+from src.config import APP_HOST, APP_PORT, WORKERS
 from src.infrastructure.logging_config import get_logger, setup_logging
 
 # Configuration du logging structuré
@@ -28,17 +29,18 @@ if __name__ == "__main__":
     logger.info(
         "Gateway starting",
         host=local_ip,
-        port=5001,
-        docs_url="http://localhost:5001/docs",
-        redoc_url="http://localhost:5001/redoc",
+        port=APP_PORT,
+        workers=WORKERS,
+        docs_url=f"http://localhost:{APP_PORT}/docs",
+        redoc_url=f"http://localhost:{APP_PORT}/redoc",
     )
 
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=5001,
+        host=APP_HOST,
+        port=APP_PORT,
         reload=False,
-        workers=1,
+        workers=WORKERS,
         log_level="info",
         access_log=True,
     )
