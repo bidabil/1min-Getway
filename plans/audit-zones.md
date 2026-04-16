@@ -9,6 +9,123 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 
 ---
 
+## Index — tous les fichiers du projet
+
+### Racine
+
+| Fichier | Zone |
+|---------|------|
+| `Dockerfile` | I1 — Docker |
+| `docker-compose.yml` | I1 — Docker |
+| `docker-compose.monitoring.yml` | I1 — Docker |
+| `.dockerignore` | I1 — Docker |
+| `.github/workflows/ci.yml` | I2 — CI |
+| `.github/workflows/ci-build.yml` | I2 — CI |
+| `.github/workflows/ci-security.yml` | I2 — CI |
+| `.github/workflows/cd-production.yml` | I3 — CD |
+| `.github/workflows/cd-staging.yml` | I3 — CD |
+| `.github/workflows/dependabot-auto-merge.yml` | I3 — CD |
+| `.github/dependabot.yml` | I3 — CD |
+| `deploy.sh` | I4 — Release/Deploy |
+| `Makefile` | I4 — Release/Deploy |
+| `.releaserc.json` | I4 — Release/Deploy |
+| `commitlint.config.js` | I4 — Release/Deploy |
+| `pyproject.toml` | I5 — Config projet |
+| `requirements.txt` | I5 — Config projet |
+| `requirements-dev.txt` | I5 — Config projet |
+| `.pre-commit-config.yaml` | I5 — Config projet |
+| `.editorconfig` | I5 — Config projet |
+| `.env.example` | I5 — Config projet |
+| `README.md` | I6 — Documentation |
+| `monitoring/prometheus.yml` | I6 — Documentation |
+| `docs/API_PARAMETERS.md` | I6 — Documentation |
+| `docs/AUDIT.md` | I6 — Documentation |
+| `docs/CI-CD-CHEATSHEET.md` | I6 — Documentation |
+| `docs/CI-CD-DOCUMENTATION.md` | I6 — Documentation |
+| `docs/CONTRIBUTING.md` | I6 — Documentation |
+| `docs/DEPENDABOT-DOCUMENTATION.md` | I6 — Documentation |
+| `docs/ENV-DOCKER-GUIDE.md` | I6 — Documentation |
+| `docs/INTEGRATION-GUIDE.md` | I6 — Documentation |
+| `docs/index.md` | I6 — Documentation |
+| `docs/FUNDING.yml` | I6 — Documentation |
+| `main.py` | P2 — Config & Bootstrap |
+| `printedcolors.py` | P6 — Adapters & Glue |
+| `plans/audit-zones.md` | _(méta — hors audit)_ |
+| `plans/improvements-plan.md` | _(méta — hors audit)_ |
+| `.env` | _(secrets — ne jamais auditer)_ |
+| `.gitignore` | _(méta git — hors audit)_ |
+| `LICENSE` | _(immuable — hors audit)_ |
+
+### Source Python `src/`
+
+| Fichier | Zone |
+|---------|------|
+| `src/__init__.py` | P1 — Contrat public |
+| `src/infrastructure/__init__.py` | P1 — Contrat public |
+| `src/api/schemas.py` | P1 — Contrat public |
+| `src/config.py` | P2 — Config & Bootstrap |
+| `src/api/app.py` | P2 — Config & Bootstrap |
+| `src/api/__init__.py` | P2 — Config & Bootstrap |
+| `src/domain/models.py` | P3 — Domaine |
+| `src/domain/ports.py` | P3 — Domaine |
+| `src/domain/services/chat_service.py` | P3 — Domaine |
+| `src/domain/conversation_service.py` | P3 — Domaine |
+| `src/domain/model_provider.py` | P3 — Domaine |
+| `src/domain/image_mapper.py` | P3 — Domaine |
+| `src/infrastructure/one_min_client.py` | P4 — Infra services |
+| `src/infrastructure/asset_service.py` | P4 — Infra services |
+| `src/infrastructure/api_key_validator.py` | P4 — Infra services |
+| `src/infrastructure/token_service.py` | P4 — Infra services |
+| `src/infrastructure/model_cache.py` | P4 — Infra services |
+| `src/infrastructure/network_service.py` | P4 — Infra services |
+| `src/infrastructure/error_service.py` | P4 — Infra services |
+| `src/infrastructure/adapters/one_min_asset_adapter.py` | P4 — Infra services |
+| `src/infrastructure/adapters/one_min_conversation_adapter.py` | P4 — Infra services |
+| `src/infrastructure/adapters/token_adapter.py` | P4 — Infra services |
+| `src/infrastructure/metrics.py` | P5 — Transversal |
+| `src/infrastructure/logging_config.py` | P5 — Transversal |
+| `src/infrastructure/circuit_breaker.py` | P5 — Transversal |
+| `src/infrastructure/rate_limiter.py` | P5 — Transversal |
+| `src/infrastructure/health_service.py` | P5 — Transversal |
+| `src/infrastructure/webhooks.py` | P5 — Transversal |
+| `src/adapters/openai_adapter.py` | P6 — Adapters & Glue |
+| `src/application/use_cases.py` | P6 — Adapters & Glue |
+| `src/container.py` | P6 — Adapters & Glue |
+| `src/api/routes.py` | P6 — Adapters & Glue |
+
+### Tests `tests/`
+
+| Fichier | Zone |
+|---------|------|
+| `tests/conftest.py` | P7 — Tests |
+| `tests/conftest_fastapi.py` | P7 — Tests |
+| `tests/test_adapters/test_openai_adapter.py` | P7 — Tests |
+| `tests/test_application/test_use_cases.py` | P7 — Tests |
+| `tests/test_domain/test_chat_service.py` | P7 — Tests |
+| `tests/test_domain/test_conversation_service.py` | P7 — Tests |
+| `tests/test_domain/test_model_provider.py` | P7 — Tests |
+| `tests/test_domain/test_ports.py` | P7 — Tests |
+| `tests/test_error_service.py` | P7 — Tests |
+| `tests/test_infrastructure/test_adapters.py` | P7 — Tests |
+| `tests/test_infrastructure/test_api_key_validator.py` | P7 — Tests |
+| `tests/test_infrastructure/test_asset_service.py` | P7 — Tests |
+| `tests/test_infrastructure/test_circuit_breaker.py` | P7 — Tests |
+| `tests/test_infrastructure/test_health_service.py` | P7 — Tests |
+| `tests/test_infrastructure/test_logging_config.py` | P7 — Tests |
+| `tests/test_infrastructure/test_metrics.py` | P7 — Tests |
+| `tests/test_infrastructure/test_network_service.py` | P7 — Tests |
+| `tests/test_infrastructure/test_one_min_client.py` | P7 — Tests |
+| `tests/test_infrastructure/test_rate_limiter.py` | P7 — Tests |
+| `tests/test_infrastructure/test_token_service.py` | P7 — Tests |
+| `tests/test_infrastructure/test_webhooks.py` | P7 — Tests |
+| `tests/test_integration/test_api_endpoints.py` | P7 — Tests |
+| `tests/test_integration/test_circuit_breaker_integration.py` | P7 — Tests |
+| `tests/test_adapters/__init__.py` | _(vide — ignorable)_ |
+| `tests/test_domain/__init__.py` | _(vide — ignorable)_ |
+| `tests/test_infrastructure/__init__.py` | _(vide — ignorable)_ |
+
+---
+
 ## Zones Python (code source)
 
 ### Zone P1 — Contrat public
@@ -27,6 +144,7 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 **Fichiers :**
 - `src/config.py`
 - `src/api/app.py`
+- `src/api/__init__.py`
 - `main.py`
 
 **Question clé :** Variables lues mais jamais consommées ? Middleware sans effet ?
@@ -87,6 +205,7 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 
 ### Zone P6 — Adapters & Glue code
 **Fichiers :**
+- `src/api/routes.py` (655 lignes)
 - `src/adapters/openai_adapter.py`
 - `src/application/use_cases.py`
 - `src/container.py`
@@ -102,14 +221,29 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 **Fichiers :**
 - `tests/conftest.py`
 - `tests/conftest_fastapi.py`
-- `tests/test_adapters/`
-- `tests/test_application/`
-- `tests/test_domain/`
+- `tests/test_adapters/test_openai_adapter.py`
+- `tests/test_application/test_use_cases.py`
+- `tests/test_domain/test_chat_service.py`
+- `tests/test_domain/test_conversation_service.py`
+- `tests/test_domain/test_model_provider.py`
+- `tests/test_domain/test_ports.py`
 - `tests/test_error_service.py`
-- `tests/test_infrastructure/`
-- `tests/test_integration/`
+- `tests/test_infrastructure/test_adapters.py`
+- `tests/test_infrastructure/test_api_key_validator.py`
+- `tests/test_infrastructure/test_asset_service.py`
+- `tests/test_infrastructure/test_circuit_breaker.py`
+- `tests/test_infrastructure/test_health_service.py`
+- `tests/test_infrastructure/test_logging_config.py`
+- `tests/test_infrastructure/test_metrics.py`
+- `tests/test_infrastructure/test_network_service.py`
+- `tests/test_infrastructure/test_one_min_client.py`
+- `tests/test_infrastructure/test_rate_limiter.py`
+- `tests/test_infrastructure/test_token_service.py`
+- `tests/test_infrastructure/test_webhooks.py`
+- `tests/test_integration/test_api_endpoints.py`
+- `tests/test_integration/test_circuit_breaker_integration.py`
 
-**Question clé :** Fixtures définies dans conftest jamais utilisées par un test ? Deux conftest pour une seule app ? Tests qui ne testent rien (assert trivial) ?
+**Question clé :** Fixtures dans conftest jamais utilisées ? Deux conftest pour une seule app ? Tests avec assert trivial ?
 
 **Résultat :** _(à remplir)_
 
@@ -124,7 +258,7 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 - `docker-compose.monitoring.yml`
 - `.dockerignore`
 
-**Question clé :** Services définis dans compose jamais utilisés en prod ? Variables d'env dans compose redondantes avec `config.py` ? Étapes du Dockerfile dupliquées ou inutiles ?
+**Question clé :** Services compose jamais utilisés en prod ? Variables d'env redondantes avec `config.py` ? Étapes Dockerfile dupliquées ?
 
 **Résultat :** _(à remplir)_
 
@@ -136,7 +270,7 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 - `.github/workflows/ci-build.yml` (279 lignes)
 - `.github/workflows/ci-security.yml` (205 lignes)
 
-**Question clé :** Steps dupliqués entre workflows ? Jobs qui tournent mais dont le résultat n'est jamais utilisé ? Variables d'env définies mais non consommées dans le job ?
+**Question clé :** Steps dupliqués entre workflows ? Jobs dont le résultat n'est jamais utilisé ? Variables d'env définies mais non consommées ?
 
 **Résultat :** _(à remplir)_
 
@@ -147,8 +281,9 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 - `.github/workflows/cd-production.yml` (514 lignes — le plus gros)
 - `.github/workflows/cd-staging.yml` (255 lignes)
 - `.github/workflows/dependabot-auto-merge.yml` (243 lignes)
+- `.github/dependabot.yml`
 
-**Question clé :** Logique dupliquée entre staging et production ? Steps dans dependabot-auto-merge qui n'ont plus de sens ? Secrets référencés mais non configurés dans GitHub ?
+**Question clé :** Logique dupliquée entre staging et prod ? Steps dependabot obsolètes ? Secrets référencés mais absents de GitHub ?
 
 **Résultat :** _(à remplir)_
 
@@ -161,7 +296,7 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 - `commitlint.config.js` (178 lignes)
 - `Makefile`
 
-**Question clé :** Targets Makefile sans appelant ? Variables dans `deploy.sh` jamais réutilisées ? Rules commitlint en conflit avec `.releaserc.json` ?
+**Question clé :** Targets Makefile sans appelant ? Variables `deploy.sh` jamais réutilisées ? Rules commitlint en conflit avec `.releaserc.json` ?
 
 **Résultat :** _(à remplir)_
 
@@ -175,9 +310,8 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 - `.pre-commit-config.yaml`
 - `.editorconfig`
 - `.env.example`
-- `.env` _(ne pas committer)_
 
-**Question clé :** Dépendances dans `requirements.txt` jamais importées dans `src/` ? Hooks pre-commit qui font doublon avec CI ? Config tool dans `pyproject.toml` pour un outil non installé ?
+**Question clé :** Dépendances jamais importées dans `src/` ? Hooks pre-commit qui doublonnent le CI ? Config d'outil non installé dans `pyproject.toml` ?
 
 **Résultat :** _(à remplir)_
 
@@ -198,7 +332,7 @@ Outil recommandé pour le code Python : `vulture src/ --min-confidence 70`
 - `docs/FUNDING.yml`
 - `monitoring/prometheus.yml`
 
-**Question clé :** Docs qui décrivent des variables/endpoints supprimés ? `SECRET_KEY` encore mentionnée dans les guides ? Prometheus scrape des métriques que l'app n'expose plus ?
+**Question clé :** Docs décrivant des variables/endpoints supprimés ? Prometheus scrape des métriques que l'app n'expose plus ?
 
 **Résultat :**
 - `docs/ENV-DOCKER-GUIDE.md` et `docs/AUDIT.md` mentionnent encore `SECRET_KEY` supprimée
