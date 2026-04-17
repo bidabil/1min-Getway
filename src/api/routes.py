@@ -317,11 +317,30 @@ async def chat_completions(
         )
 
     # --- 2. PRÉPARATION DE LA REQUÊTE ---
-    # Conversion des messages en format dict
+    # Conversion des messages en format dict (serialize Pydantic MessageContent → plain dict)
     messages = [
-        {"role": msg.role, "content": msg.content if isinstance(msg.content, str) else msg.content}
+        {
+            "role": msg.role,
+            "content": (
+                [p.model_dump() for p in msg.content]
+                if isinstance(msg.content, list)
+                else msg.content
+            ),
+        }
         for msg in body.messages
     ]
+
+    logger.debug(
+        f"REQUEST | model={body.model} stream={body.stream}",
+        messages=[
+            {
+                "role": m["role"],
+                "content_type": type(m["content"]).__name__,
+                "content_none": m["content"] is None,
+            }
+            for m in messages
+        ],
+    )
 
     # Extra params pour 1min.ai
     extra_params: dict[str, Any] = {}
@@ -442,7 +461,7 @@ async def _handle_non_streaming(
         ) from None
     except Exception as e:
         api_circuit_breaker.record_failure()
-        logger.error(f"UNEXPECTED_ERROR | {type(e).__name__}: {str(e)}")
+        logger.error(f"UNEXPECTED_ERROR | {type(e).__name__}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail={
