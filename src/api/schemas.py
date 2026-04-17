@@ -63,9 +63,9 @@ class ChatMessage(BaseModel):
         description="Rôle de l'auteur du message: 'system', 'user', ou 'assistant'",
         examples=["user", "assistant", "system"],
     )
-    content: str | list[MessageContent] = Field(
-        ...,
-        description="Contenu du message. Peut être une chaîne ou une liste de contenus (multimodal)",
+    content: str | list[MessageContent] | None = Field(
+        None,
+        description="Contenu du message. Peut être une chaîne, une liste de contenus (multimodal), ou null pour les messages assistant avec tool_calls",
     )
 
     model_config = {
