@@ -49,7 +49,14 @@ class ChatService:
         messages = request.messages
         extra_params = request.extra_params or {}
 
-        last_message = messages[-1] if messages else {}
+        last_message = next(
+            (
+                m
+                for m in reversed(messages)
+                if m.get("role") in ("user", "tool") and m.get("content")
+            ),
+            messages[-1] if messages else {},
+        )
         content = last_message.get("content", "")
 
         raw_prompt = ""

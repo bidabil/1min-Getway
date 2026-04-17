@@ -65,9 +65,18 @@ class ChatCompletionUseCase:
         if not request.messages:
             return Failure(error_code="INVALID_REQUEST", message="No messages provided")
 
-        last_message = request.messages[-1] if request.messages else {}
-        if not last_message.get("content"):
-            return Failure(error_code="INVALID_REQUEST", message="Last message has no content")
+        last_user_message = next(
+            (
+                m
+                for m in reversed(request.messages)
+                if m.get("role") in ("user", "tool") and m.get("content")
+            ),
+            None,
+        )
+        if not last_user_message:
+            return Failure(
+                error_code="INVALID_REQUEST", message="No user message with content found"
+            )
 
         # 3. Résolution du contexte
         try:
