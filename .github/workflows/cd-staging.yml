@@ -75,6 +75,7 @@ jobs:
         uses: cycjimmy/semantic-release-action@v6
         with:
           extra_plugins: |
+            conventional-changelog-conventionalcommits
             @semantic-release/changelog@6.0.3
             @semantic-release/git@10.0.1
         env:
