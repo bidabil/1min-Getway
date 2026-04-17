@@ -331,10 +331,8 @@ async def chat_completions(
     ]
 
     logger.debug(
-        "REQUEST | model=%s stream=%s messages=%s",
-        body.model,
-        body.stream,
-        [
+        f"REQUEST | model={body.model} stream={body.stream}",
+        messages=[
             {
                 "role": m["role"],
                 "content_type": type(m["content"]).__name__,
