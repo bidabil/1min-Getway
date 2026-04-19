@@ -164,6 +164,83 @@ class TestChatServiceContextResolution:
         assert context.prompt_object["prompt"] == ""
 
 
+class TestChatServiceSystemPromptInjection:
+    """Tests pour l'injection du system prompt dans le prompt utilisateur."""
+
+    def test_system_message_injected_at_end_of_prompt(self, chat_service, chat_request_factory):
+        request = chat_request_factory(
+            messages=[
+                {"role": "system", "content": "Tu es un expert DevOps."},
+                {"role": "user", "content": "Comment configurer nginx ?"},
+            ]
+        )
+
+        context = chat_service.resolve_context(request)
+
+        prompt = context.prompt_object["prompt"]
+        assert prompt.startswith("Comment configurer nginx ?")
+        assert "<system_instructions>\nTu es un expert DevOps.\n</system_instructions>" in prompt
+        assert prompt.index("Comment configurer nginx ?") < prompt.index("<system_instructions>")
+
+    def test_no_system_message_leaves_prompt_unchanged(self, chat_service, chat_request_factory):
+        request = chat_request_factory(messages=[{"role": "user", "content": "Hello"}])
+
+        context = chat_service.resolve_context(request)
+
+        assert context.prompt_object["prompt"] == "Hello"
+        assert "<system_instructions>" not in context.prompt_object["prompt"]
+
+    def test_multiple_system_messages_are_joined(self, chat_service, chat_request_factory):
+        request = chat_request_factory(
+            messages=[
+                {"role": "system", "content": "Tu es un expert DevOps."},
+                {"role": "system", "content": "Réponds uniquement en JSON."},
+                {"role": "user", "content": "Configure nginx"},
+            ]
+        )
+
+        context = chat_service.resolve_context(request)
+
+        prompt = context.prompt_object["prompt"]
+        assert "Tu es un expert DevOps." in prompt
+        assert "Réponds uniquement en JSON." in prompt
+
+    def test_system_message_with_multipart_user_content(
+        self, chat_service, chat_request_factory, mock_asset_service
+    ):
+        request = chat_request_factory(
+            messages=[
+                {"role": "system", "content": "Tu es un assistant visuel."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Décris cette image"},
+                        {"type": "image_url", "image_url": {"url": "data:image/png;base64,xxx"}},
+                    ],
+                },
+            ]
+        )
+
+        context = chat_service.resolve_context(request)
+
+        prompt = context.prompt_object["prompt"]
+        assert "Décris cette image" in prompt
+        assert "<system_instructions>\nTu es un assistant visuel.\n</system_instructions>" in prompt
+
+    def test_system_message_empty_content_is_ignored(self, chat_service, chat_request_factory):
+        request = chat_request_factory(
+            messages=[
+                {"role": "system", "content": ""},
+                {"role": "user", "content": "Hello"},
+            ]
+        )
+
+        context = chat_service.resolve_context(request)
+
+        assert context.prompt_object["prompt"] == "Hello"
+        assert "<system_instructions>" not in context.prompt_object["prompt"]
+
+
 class TestChatServiceWebSearch:
     """Tests pour la fonctionnalité de recherche web."""
 
