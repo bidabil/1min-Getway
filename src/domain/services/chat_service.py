@@ -49,6 +49,11 @@ class ChatService:
         messages = request.messages
         extra_params = request.extra_params or {}
 
+        system_parts = [
+            m.get("content", "") for m in messages if m.get("role") == "system" and m.get("content")
+        ]
+        system_content = "\n".join(system_parts) if system_parts else ""
+
         last_message = next(
             (
                 m
@@ -73,6 +78,12 @@ class ChatService:
                         image_paths.append(path)
         else:
             raw_prompt = str(content)
+
+        if system_content:
+            raw_prompt = (
+                f"{raw_prompt}\n\n"
+                f"<system_instructions>\n{system_content}\n</system_instructions>"
+            )
 
         # Détermination du type
         conv_type = self._determine_type(raw_prompt, image_paths, extra_params)
