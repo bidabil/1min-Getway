@@ -515,9 +515,15 @@ async def _handle_streaming(
 
                         decoded_line = line.strip()
 
-                        # Nettoyage du préfixe "data: " si présent
+                        # Ignorer les lignes de type SSE (ex: "event: content")
+                        if decoded_line.startswith("event:"):
+                            continue
+
+                        # Traiter uniquement les lignes "data:"
                         if decoded_line.startswith("data: "):
                             decoded_line = decoded_line[6:]
+                        else:
+                            continue
 
                         if decoded_line == "[DONE]":
                             break
@@ -530,7 +536,9 @@ async def _handle_streaming(
                         # Tentative de parsing JSON
                         try:
                             data = json.loads(decoded_line)
-                            content_to_send = data.get("result", data.get("content", ""))
+                            content_to_send = data.get(
+                                "result", data.get("content", data.get("text", ""))
+                            )
                         except json.JSONDecodeError:
                             content_to_send = decoded_line
 
