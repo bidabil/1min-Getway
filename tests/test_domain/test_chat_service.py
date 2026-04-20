@@ -297,3 +297,108 @@ class TestChatServiceWebSearch:
 
         assert "conversationId" in context.prompt_object
         assert context.prompt_object["conversationId"] == "test-uuid-12345678"
+
+
+class TestChatServiceToolCalling:
+    """Tests pour l'injection des tool definitions et la gestion des tool results."""
+
+    def test_tools_injected_into_prompt(self, chat_service, chat_request_factory):
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_file",
+                    "description": "Read a file",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"path": {"type": "string", "description": "File path"}},
+                        "required": ["path"],
+                    },
+                },
+            }
+        ]
+        request = chat_request_factory(
+            messages=[{"role": "user", "content": "List files"}],
+            extra_params={"tools": tools},
+        )
+        context = chat_service.resolve_context(request)
+
+        prompt = context.prompt_object["prompt"]
+        assert "read_file" in prompt
+        assert "<tool_call>" in prompt
+        assert "path (string" in prompt
+        assert "(required)" in prompt
+
+    def test_tool_result_message_wrapped(self, chat_service, chat_request_factory):
+        request = chat_request_factory(
+            messages=[
+                {"role": "user", "content": "List files"},
+                {"role": "assistant", "content": None},
+                {"role": "tool", "tool_call_id": "call_x", "content": "file1.txt\nfile2.txt"},
+            ]
+        )
+        context = chat_service.resolve_context(request)
+
+        prompt = context.prompt_object["prompt"]
+        assert "<tool_result>" in prompt
+        assert "file1.txt" in prompt
+
+    def test_build_tools_injection_format(self):
+        from src.domain.services.chat_service import ChatService
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "write_file",
+                    "description": "Write content to a file",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string", "description": "File path"},
+                            "content": {"type": "string", "description": "Content"},
+                        },
+                        "required": ["path", "content"],
+                    },
+                },
+            }
+        ]
+        result = ChatService._build_tools_injection(tools)
+
+        assert "write_file" in result
+        assert "<tool_call>" in result
+        assert "path (string, required)" in result or "path (string" in result
+        assert "content (string" in result
+
+    def test_tools_appended_to_existing_system_content(self, chat_service, chat_request_factory):
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "search",
+                    "description": "Search the web",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+        request = chat_request_factory(
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Find something"},
+            ],
+            extra_params={"tools": tools},
+        )
+        context = chat_service.resolve_context(request)
+
+        prompt = context.prompt_object["prompt"]
+        assert "You are a helpful assistant." in prompt
+        assert "search" in prompt
+        assert "<tool_call>" in prompt
+
+    def test_no_tools_no_injection(self, chat_service, chat_request_factory):
+        request = chat_request_factory(messages=[{"role": "user", "content": "Hello"}])
+        context = chat_service.resolve_context(request)
+
+        prompt = context.prompt_object["prompt"]
+        assert "<tool_call>" not in prompt
+        assert "Tool Use Instructions" not in prompt

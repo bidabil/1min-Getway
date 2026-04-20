@@ -395,6 +395,193 @@ class TestStreamingSSEParser:
         assert last_chunk["choices"][0]["finish_reason"] == "stop"
 
 
+class TestToolCalling:
+    """Tests pour le function calling via XML."""
+
+    def test_schema_accepts_tools_field(self, client, auth_headers):
+        """Le schéma ChatCompletionRequest accepte le champ tools sans erreur 422."""
+        payload = {
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "List files"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "read_file",
+                        "description": "Read a file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"path": {"type": "string"}},
+                            "required": ["path"],
+                        },
+                    },
+                }
+            ],
+        }
+        from unittest.mock import MagicMock, patch
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "aiRecord": {
+                "aiRecordDetail": {
+                    "resultObject": [
+                        "<tool_call><name>read_file</name><parameters><path>/test.txt</path></parameters></tool_call>"
+                    ]
+                }
+            }
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("httpx.AsyncClient.post") as mock_post:
+            mock_post.return_value = mock_response
+            response = client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+
+        # 422 interdit — le payload est valide
+        assert response.status_code != 422
+
+    def test_tool_call_response_returns_tool_calls_format(self, client, auth_headers):
+        """Quand la réponse contient un <tool_call>, finish_reason doit être 'tool_calls'."""
+        payload = {
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Read file.txt"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "read_file",
+                        "description": "Read a file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"path": {"type": "string"}},
+                            "required": ["path"],
+                        },
+                    },
+                }
+            ],
+        }
+        from unittest.mock import MagicMock, patch
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "aiRecord": {
+                "aiRecordDetail": {
+                    "resultObject": [
+                        "<tool_call><name>read_file</name><parameters><path>/file.txt</path></parameters></tool_call>"
+                    ]
+                }
+            }
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("httpx.AsyncClient.post") as mock_post:
+            mock_post.return_value = mock_response
+            response = client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+
+        if response.status_code == 200:
+            data = response.json()
+            choice = data["choices"][0]
+            assert choice["finish_reason"] == "tool_calls"
+            assert "tool_calls" in choice["message"]
+            tc = choice["message"]["tool_calls"][0]
+            assert tc["function"]["name"] == "read_file"
+            assert tc["type"] == "function"
+            assert "id" in tc
+            args = json.loads(tc["function"]["arguments"])
+            assert args["path"] == "/file.txt"
+
+    def test_normal_response_without_tool_calls(self, client, auth_headers):
+        """Sans <tool_call> dans la réponse, finish_reason reste 'stop'."""
+        payload = {
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Say hello"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "read_file",
+                        "description": "Read a file",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ],
+        }
+        from unittest.mock import MagicMock, patch
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "aiRecord": {"aiRecordDetail": {"resultObject": ["Hello! How can I help you today?"]}}
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("httpx.AsyncClient.post") as mock_post:
+            mock_post.return_value = mock_response
+            response = client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+
+        if response.status_code == 200:
+            data = response.json()
+            assert data["choices"][0]["finish_reason"] == "stop"
+            assert data["choices"][0]["message"]["content"] == "Hello! How can I help you today?"
+
+    def test_parse_tool_call_single(self):
+        """_parse_tool_calls détecte un bloc <tool_call> simple."""
+        from src.api.routes import _parse_tool_calls
+
+        content = "<tool_call><name>read_file</name><parameters><path>/home/test.txt</path></parameters></tool_call>"
+        result = _parse_tool_calls(content)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["function"]["name"] == "read_file"
+        assert result[0]["type"] == "function"
+        assert "id" in result[0]
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args["path"] == "/home/test.txt"
+
+    def test_parse_tool_call_multiple_params(self):
+        """_parse_tool_calls gère plusieurs paramètres."""
+        from src.api.routes import _parse_tool_calls
+
+        content = "<tool_call><name>write_file</name><parameters><path>/out.txt</path><content>hello world</content></parameters></tool_call>"
+        result = _parse_tool_calls(content)
+
+        assert result is not None
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args["path"] == "/out.txt"
+        assert args["content"] == "hello world"
+
+    def test_parse_tool_calls_multiple_blocks(self):
+        """_parse_tool_calls détecte plusieurs tool_calls dans une réponse."""
+        from src.api.routes import _parse_tool_calls
+
+        content = (
+            "<tool_call><name>read_file</name><parameters><path>/a</path></parameters></tool_call>"
+            "<tool_call><name>write_file</name><parameters><path>/b</path></parameters></tool_call>"
+        )
+        result = _parse_tool_calls(content)
+
+        assert result is not None
+        assert len(result) == 2
+        assert result[0]["function"]["name"] == "read_file"
+        assert result[1]["function"]["name"] == "write_file"
+
+    def test_parse_returns_none_for_plain_text(self):
+        """_parse_tool_calls retourne None si pas de tool_call."""
+        from src.api.routes import _parse_tool_calls
+
+        result = _parse_tool_calls("This is a normal text response without any tool calls.")
+        assert result is None
+
+    def test_parse_returns_none_for_empty_string(self):
+        """_parse_tool_calls retourne None pour une chaîne vide."""
+        from src.api.routes import _parse_tool_calls
+
+        result = _parse_tool_calls("")
+        assert result is None
+
+
 class TestOpenAPIDocumentation:
     """Tests pour la documentation OpenAPI."""
 

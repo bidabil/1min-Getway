@@ -4,6 +4,7 @@ Routes FastAPI pour 1min-Gateway.
 """
 
 import json
+import re
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -46,6 +47,43 @@ from .schemas import (
 
 # Use structured logger
 logger = get_logger("1min-gateway.routes")
+
+# ============================================================================
+# TOOL CALL PARSER
+# ============================================================================
+
+_TOOL_CALL_RE = re.compile(
+    r"<tool_call>\s*<name>\s*([\w.-]+)\s*</name>\s*<parameters>(.*?)</parameters>\s*</tool_call>",
+    re.DOTALL | re.IGNORECASE,
+)
+_PARAM_RE = re.compile(r"<([\w.-]+)>(.*?)</\1>", re.DOTALL)
+
+
+def _parse_tool_calls(content: str) -> list[dict[str, Any]] | None:
+    """Parse les blocs <tool_call> XML dans une réponse de modèle."""
+    import uuid as _uuid
+
+    matches = _TOOL_CALL_RE.findall(content)
+    if not matches:
+        return None
+
+    tool_calls = []
+    for name, params_xml in matches:
+        name = name.strip()
+        params = {k.strip(): v.strip() for k, v in _PARAM_RE.findall(params_xml)}
+        tool_calls.append(
+            {
+                "id": f"call_{_uuid.uuid4().hex[:24]}",
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": json.dumps(params, ensure_ascii=False),
+                },
+            }
+        )
+
+    return tool_calls or None
+
 
 # Router FastAPI
 router = APIRouter()
@@ -357,6 +395,8 @@ async def chat_completions(
         extra_params["temperature"] = body.temperature
     if body.max_tokens is not None:
         extra_params["max_tokens"] = body.max_tokens
+    if body.tools:
+        extra_params["tools"] = body.tools
 
     chat_request = ChatRequest(
         api_key=api_key,
@@ -405,6 +445,8 @@ async def chat_completions(
     api_url = ONE_MIN_FEATURE_API_URL if context.type == "IMAGE_GENERATOR" else ONE_MIN_CHAT_API_URL
     headers: dict[str, str] = {"API-KEY": api_key, "Content-Type": "application/json"}
 
+    has_tools = bool(body.tools)
+
     if not body.stream:
         # Mode non-streaming
         return await _handle_non_streaming(
@@ -412,7 +454,9 @@ async def chat_completions(
         )
     else:
         # Mode streaming
-        return await _handle_streaming(payload, headers, body.model, prompt_token_count, api_url)
+        return await _handle_streaming(
+            payload, headers, body.model, prompt_token_count, api_url, has_tools
+        )
 
 
 async def _handle_non_streaming(
@@ -485,6 +529,7 @@ async def _handle_streaming(
     model: str,
     prompt_tokens: int,
     api_url: str,
+    has_tools: bool = False,
 ) -> StreamingResponse:
     """Gère une requête streaming avec SSE."""
 
@@ -497,6 +542,7 @@ async def _handle_streaming(
 
         chat_id = f"chatcmpl-{uuid.uuid4()}"
         all_chunks_text = ""
+        buffered_chunks: list[str] = []
 
         try:
             async with httpx.AsyncClient(timeout=180.0) as client:
@@ -561,7 +607,12 @@ async def _handle_streaming(
                                 }
                             ],
                         }
-                        yield f"data: {json.dumps(chunk_data)}\n\n"
+
+                        if has_tools:
+                            # Buffer — on ne peut pas émettre avant de savoir s'il y a un tool_call
+                            buffered_chunks.append(f"data: {json.dumps(chunk_data)}\n\n")
+                        else:
+                            yield f"data: {json.dumps(chunk_data)}\n\n"
 
         except Exception as e:
             api_circuit_breaker.record_failure()
@@ -584,21 +635,102 @@ async def _handle_streaming(
             yield f"data: {json.dumps(error_chunk)}\n\n"
             return
 
-        # Metadata finale avec tokens
-        completion_tokens = calculate_token(all_chunks_text, model)
-        final_metadata = {
-            "id": chat_id,
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": model,
-            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-            "usage": {
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": prompt_tokens + completion_tokens,
-            },
-        }
-        yield f"data: {json.dumps(final_metadata)}\n\n"
+        # Post-stream : traitement tool calls si nécessaire
+        if has_tools:
+            tool_calls = _parse_tool_calls(all_chunks_text)
+            if tool_calls:
+                # Émettre les tool_calls au format streaming OpenAI
+                tc_chunk = {
+                    "id": chat_id,
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "index": i,
+                                        "id": tc["id"],
+                                        "type": "function",
+                                        "function": {
+                                            "name": tc["function"]["name"],
+                                            "arguments": "",
+                                        },
+                                    }
+                                    for i, tc in enumerate(tool_calls)
+                                ],
+                            },
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(tc_chunk)}\n\n"
+
+                # Émettre les arguments de chaque tool call
+                for i, tc in enumerate(tool_calls):
+                    args_chunk = {
+                        "id": chat_id,
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {
+                                    "tool_calls": [
+                                        {
+                                            "index": i,
+                                            "function": {"arguments": tc["function"]["arguments"]},
+                                        }
+                                    ]
+                                },
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(args_chunk)}\n\n"
+
+                yield f"data: {json.dumps({'id': chat_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'tool_calls'}]})}\n\n"
+            else:
+                # Pas de tool calls : émettre les chunks bufférisés
+                for chunk in buffered_chunks:
+                    yield chunk
+
+                completion_tokens = calculate_token(all_chunks_text, model)
+                final_metadata = {
+                    "id": chat_id,
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": model,
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    "usage": {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": prompt_tokens + completion_tokens,
+                    },
+                }
+                yield f"data: {json.dumps(final_metadata)}\n\n"
+        else:
+            # Metadata finale avec tokens (mode sans tools)
+            completion_tokens = calculate_token(all_chunks_text, model)
+            final_metadata = {
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": model,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                "usage": {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens,
+                },
+            }
+            yield f"data: {json.dumps(final_metadata)}\n\n"
+
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(
@@ -636,6 +768,19 @@ def _transform_response(
 
         completion_token = calculate_token(content, model_name)
 
+        # Detect tool calls in the response
+        tool_calls = _parse_tool_calls(content)
+        if tool_calls:
+            message: dict[str, Any] = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": tool_calls,
+            }
+            finish_reason = "tool_calls"
+        else:
+            message = {"role": "assistant", "content": content}
+            finish_reason = "stop"
+
         return {
             "id": f"chatcmpl-{uuid.uuid4()}",
             "object": "chat.completion",
@@ -644,8 +789,8 @@ def _transform_response(
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": content},
-                    "finish_reason": "stop",
+                    "message": message,
+                    "finish_reason": finish_reason,
                 }
             ],
             "usage": {

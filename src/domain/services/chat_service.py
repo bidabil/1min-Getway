@@ -82,6 +82,17 @@ class ChatService:
         else:
             raw_prompt = str(content)
 
+        # Wrap tool results so the model understands this is a tool execution output
+        if last_message.get("role") == "tool":
+            raw_prompt = f"<tool_result>\n{raw_prompt}\n</tool_result>"
+
+        # Inject tool definitions into system instructions when tools are present
+        if tools := extra_params.get("tools"):
+            tools_text = self._build_tools_injection(tools)
+            system_content = (
+                (system_content + "\n\n" + tools_text) if system_content else tools_text
+            )
+
         if system_content:
             raw_prompt = (
                 f"{raw_prompt}\n\n"
@@ -181,3 +192,44 @@ class ChatService:
             prompt_object["attachments"] = attachments
 
         return prompt_object
+
+    @staticmethod
+    def _build_tools_injection(tools: list[dict[str, Any]]) -> str:
+        """Sérialise les tool definitions OpenAI en instructions XML pour le prompt."""
+        lines = [
+            "# Tool Use Instructions",
+            "",
+            "You have access to the following tools. When you need to call a tool, output ONLY a <tool_call> XML block — no text before or after it.",
+            "",
+            "Format:",
+            "<tool_call>",
+            "<name>tool_name</name>",
+            "<parameters>",
+            "<param_name>value</param_name>",
+            "</parameters>",
+            "</tool_call>",
+            "",
+            "Available tools:",
+        ]
+
+        for tool in tools:
+            fn = tool.get("function", tool)
+            name = fn.get("name", "")
+            description = fn.get("description", "")
+            params_schema = fn.get("parameters", {})
+            properties = params_schema.get("properties", {})
+            required_fields = params_schema.get("required", [])
+
+            lines.append("")
+            lines.append(f"### {name}")
+            if description:
+                lines.append(description)
+            if properties:
+                lines.append("Parameters:")
+                for pname, pinfo in properties.items():
+                    req = " (required)" if pname in required_fields else ""
+                    ptype = pinfo.get("type", "string")
+                    pdesc = pinfo.get("description", "")
+                    lines.append(f"  - {pname} ({ptype}{req}): {pdesc}")
+
+        return "\n".join(lines)
