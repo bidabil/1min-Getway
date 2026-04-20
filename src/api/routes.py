@@ -336,14 +336,15 @@ async def chat_completions(
     ]
 
     logger.debug(
-        f"REQUEST | model={body.model} stream={body.stream}",
-        messages=[
-            {
-                "role": m["role"],
-                "content": m["content"],
-            }
-            for m in messages
-        ],
+        "REQUEST | model={} stream={}\n{}".format(
+            body.model,
+            body.stream,
+            json.dumps(
+                [{"role": m["role"], "content": m["content"]} for m in messages],
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
     )
 
     # Extra params pour 1min.ai
