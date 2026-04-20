@@ -222,7 +222,18 @@ def mock_token_service():
 
 
 @pytest.fixture
-def chat_service(mock_asset_service, mock_conversation_service, mock_token_service):
+def mock_session_store():
+    """Mock du SessionStorePort."""
+    mock = MagicMock()
+    mock.get.return_value = None
+    mock.make_key.return_value = "test-session-key-hash"
+    return mock
+
+
+@pytest.fixture
+def chat_service(
+    mock_asset_service, mock_conversation_service, mock_token_service, mock_session_store
+):
     """ChatService avec mocks injectés."""
     from src.domain.services.chat_service import ChatService
 
@@ -230,6 +241,7 @@ def chat_service(mock_asset_service, mock_conversation_service, mock_token_servi
         asset_service=mock_asset_service,
         conversation_service=mock_conversation_service,
         token_service=mock_token_service,
+        session_store=mock_session_store,
         available_models=["gpt-4o", "gpt-4o-mini", "claude-3-haiku", "mistral-medium-latest"],
     )
 

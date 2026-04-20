@@ -12,6 +12,7 @@ from .config import API_KEY_VALIDATION_MODE, AVAILABLE_MODELS, ONE_MIN_ASSET_API
 from .domain.services.chat_service import ChatService
 from .infrastructure.adapters.one_min_asset_adapter import OneMinAssetAdapter
 from .infrastructure.adapters.one_min_conversation_adapter import OneMinConversationAdapter
+from .infrastructure.adapters.session_store_adapter import InMemorySessionStoreAdapter
 from .infrastructure.adapters.token_adapter import TiktokenAdapter
 
 
@@ -26,12 +27,14 @@ class Container:
         self._asset_adapter = OneMinAssetAdapter(ONE_MIN_ASSET_API_URL)
         self._conversation_adapter = OneMinConversationAdapter()
         self._token_adapter = TiktokenAdapter()
+        self._session_store_adapter = InMemorySessionStoreAdapter()
 
         # --- Domain Services ---
         self._chat_service = ChatService(
             asset_service=self._asset_adapter,
             conversation_service=self._conversation_adapter,
             token_service=self._token_adapter,
+            session_store=self._session_store_adapter,
             available_models=AVAILABLE_MODELS,
         )
 

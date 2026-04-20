@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "1min-gateway"
-version = "1.0.0"
+version = "1.1.0"
 description = "1min-Gateway: Intelligent API Gateway for AI models"
 authors = [
     {name = "Billel Attafi", email = "billel@example.com"}
@@ -145,7 +145,7 @@ indent-style = "space"
 # ==============================================================
 [tool.commitizen]
 name = "cz_gitmoji"
-version = "1.0.0"
+version = "1.1.0"
 tag_format = "v$version"
 update_changelog_on_bump = true
 bump_message = "🔖 chore(release): bump version $current_version → $new_version [skip ci]"

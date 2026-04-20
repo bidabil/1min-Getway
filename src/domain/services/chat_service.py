@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Any
 
 from ..ports import (
@@ -6,6 +7,7 @@ from ..ports import (
     ChatRequest,
     ConversationContext,
     ConversationServicePort,
+    SessionStorePort,
     TokenServicePort,
 )
 
@@ -23,11 +25,13 @@ class ChatService:
         asset_service: AssetServicePort,
         conversation_service: ConversationServicePort,
         token_service: TokenServicePort,
+        session_store: SessionStorePort,
         available_models: list[str],
     ) -> None:
         self._asset_service = asset_service
         self._conversation_service = conversation_service
         self._token_service = token_service
+        self._session_store = session_store
         self._available_models = available_models
 
     def validate_model(self, model: str) -> bool:
@@ -67,7 +71,6 @@ class ChatService:
         raw_prompt = ""
         image_paths: list[str] = []
 
-        # Extraction du contenu
         if isinstance(content, list):
             for part in content:
                 if part.get("type") == "text":
@@ -85,14 +88,11 @@ class ChatService:
                 f"<system_instructions>\n{system_content}\n</system_instructions>"
             )
 
-        # Détermination du type
-        conv_type = self._determine_type(raw_prompt, image_paths, extra_params)
+        conv_type = self._determine_type(extra_params)
 
-        # Création de conversation si nécessaire
-        session_id = self._resolve_session_id(conv_type, request, extra_params, raw_prompt)
+        session_id = self._resolve_session_id(conv_type, request, extra_params, messages)
 
-        # Construction du promptObject
-        prompt_object = self._build_prompt_object(conv_type, raw_prompt, image_paths, extra_params)
+        prompt_object = self._build_prompt_object(raw_prompt, image_paths, extra_params, session_id)
 
         return ConversationContext(
             type=conv_type,
@@ -101,89 +101,83 @@ class ChatService:
             prompt_object=prompt_object,
         )
 
-    def _determine_type(
-        self,
-        prompt: str,
-        images: list[str],
-        params: dict[str, Any],
-    ) -> str:
-        """Détermine le type de conversation"""
-        import re
-
+    def _determine_type(self, params: dict[str, Any]) -> str:
+        """Détermine le type de feature"""
         if params.get("content_type") == "IMAGE_GENERATOR":
             return "IMAGE_GENERATOR"
-
-        if params.get("file_ids"):
-            return "CHAT_WITH_PDF"
-
-        yt_pattern = r"(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)[^\s&]+)"
-        if re.search(yt_pattern, prompt):
-            return "CHAT_WITH_YOUTUBE_VIDEO"
-
-        if images:
-            return "CHAT_WITH_IMAGE"
-
-        return "CHAT_WITH_AI"
+        return "UNIFY_CHAT_WITH_AI"
 
     def _resolve_session_id(
         self,
         conv_type: str,
         request: ChatRequest,
         params: dict[str, Any],
-        prompt: str,
+        messages: list[dict[str, Any]],
     ) -> str | None:
-        """Résout le session_id selon le type"""
-        import re
-        import uuid
-
-        # Types sans session_id
-        if conv_type in ["CHAT_WITH_AI", "CHAT_WITH_IMAGE", "IMAGE_GENERATOR"]:
+        """Résout le conversationId pour les chats UNIFY_CHAT_WITH_AI"""
+        if conv_type == "IMAGE_GENERATOR":
             return None
 
-        # CHAT_WITH_PDF
-        if conv_type == "CHAT_WITH_PDF":
-            return self._conversation_service.create_conversation(
-                api_key=request.api_key,
-                model=request.model,
-                conv_type=conv_type,
-                title=f"PDF_{request.model[:20]}_{uuid.uuid4().hex[:8]}",
-                file_ids=params.get("file_ids"),
+        # Extraction du premier message user pour la clé de session
+        first_user_content = next(
+            (m.get("content", "") for m in messages if m.get("role") == "user"),
+            "",
+        )
+        if isinstance(first_user_content, list):
+            first_user_content = " ".join(
+                p.get("text", "") for p in first_user_content if p.get("type") == "text"
             )
 
-        # CHAT_WITH_YOUTUBE_VIDEO
-        if conv_type == "CHAT_WITH_YOUTUBE_VIDEO":
-            yt_match = re.search(
-                r"(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)[^\s&]+)", prompt
-            )
-            return self._conversation_service.create_conversation(
+        session_key = self._session_store.make_key(
+            request.api_key, request.model, str(first_user_content)
+        )
+
+        is_new_session = len(messages) <= 1
+
+        if is_new_session:
+            conv_id = self._conversation_service.create_conversation(
                 api_key=request.api_key,
                 model=request.model,
-                conv_type=conv_type,
-                title=f"YT_{request.model[:20]}_{uuid.uuid4().hex[:8]}",
-                youtube_url=yt_match.group(1) if yt_match else None,
+                conv_type="UNIFY_CHAT_WITH_AI",
+                title=f"GW_{request.model[:20]}_{uuid.uuid4().hex[:8]}",
             )
+            if conv_id:
+                self._session_store.set(session_key, conv_id)
+            return conv_id
 
-        return None
+        return self._session_store.get(session_key)
 
     def _build_prompt_object(
         self,
-        conv_type: str,
         prompt: str,
         images: list[str],
         params: dict[str, Any],
+        conversation_id: str | None,
     ) -> dict[str, Any]:
-        """Construit le promptObject"""
-        prompt_object: dict[str, Any] = {
-            "prompt": prompt,
-            "isMixed": bool(params.get("is_mixed", False)),
-            "webSearch": bool(params.get("web_search", False)),
+        """Construit le promptObject selon la nouvelle spec Chat with AI API"""
+        prompt_object: dict[str, Any] = {"prompt": prompt}
+
+        if conversation_id:
+            prompt_object["conversationId"] = conversation_id
+
+        prompt_object["settings"] = {
+            "historySettings": {
+                "isMixed": bool(params.get("is_mixed", False)),
+                "historyMessageLimit": int(params.get("history_message_limit", 10)),
+            },
+            "webSearchSettings": {
+                "webSearch": bool(params.get("web_search", False)),
+                "numOfSite": int(params.get("num_of_site", 3)),
+                "maxWord": int(params.get("max_word", 1000)),
+            },
         }
 
-        if images and conv_type == "CHAT_WITH_IMAGE":
-            prompt_object["imageList"] = images
-
-        if prompt_object["webSearch"]:
-            prompt_object["numOfSite"] = int(params.get("num_of_site", 1))
-            prompt_object["maxWord"] = int(params.get("max_word", 500))
+        attachments: dict[str, Any] = {}
+        if images:
+            attachments["images"] = images
+        if params.get("file_ids"):
+            attachments["files"] = params["file_ids"]
+        if attachments:
+            prompt_object["attachments"] = attachments
 
         return prompt_object

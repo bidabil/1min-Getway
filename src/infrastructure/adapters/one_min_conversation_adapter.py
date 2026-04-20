@@ -12,8 +12,8 @@ class OneMinConversationAdapter(ConversationServicePort):
         self,
         api_key: str,
         model: str,
-        conv_type: str,
-        title: str,
+        conv_type: str = "UNIFY_CHAT_WITH_AI",
+        title: str = "Gateway Session",
         file_ids: list[str] | None = None,
         youtube_url: str | None = None,
     ) -> str | None:
