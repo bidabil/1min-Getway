@@ -340,8 +340,7 @@ async def chat_completions(
         messages=[
             {
                 "role": m["role"],
-                "content_type": type(m["content"]).__name__,
-                "content_none": m["content"] is None,
+                "content": m["content"],
             }
             for m in messages
         ],
