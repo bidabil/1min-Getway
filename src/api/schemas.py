@@ -133,6 +133,16 @@ class ChatCompletionRequest(BaseModel):
         examples=[["file-abc123", "file-def456"]],
     )
 
+    # Function calling (tool use)
+    tools: list[dict[str, Any]] | None = Field(
+        None,
+        description="Liste des outils disponibles pour le function calling (format OpenAI)",
+    )
+    tool_choice: str | dict[str, Any] | None = Field(
+        None,
+        description="Contrôle la sélection d'outil: 'auto', 'none', ou {'type': 'function', 'function': {'name': '...'}}",
+    )
+
     model_config = {
         "json_schema_extra": {
             "examples": [
