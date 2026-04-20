@@ -67,6 +67,25 @@ class AIFeatureServicePort(ABC):
         pass
 
 
+class SessionStorePort(ABC):
+    """Interface pour le store de sessions (conversationId par session)"""
+
+    @abstractmethod
+    def get(self, key: str) -> str | None:
+        """Retourne le conversationId associé à la clé, ou None"""
+        pass
+
+    @abstractmethod
+    def set(self, key: str, conversation_id: str) -> None:
+        """Stocke un conversationId pour la clé donnée"""
+        pass
+
+    @abstractmethod
+    def make_key(self, api_key: str, model: str, first_user_message: str) -> str:
+        """Construit une clé de session déterministe"""
+        pass
+
+
 class TokenServicePort(ABC):
     """Interface pour le calcul de tokens"""
 

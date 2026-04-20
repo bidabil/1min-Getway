@@ -14,7 +14,12 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from ..application.use_cases import Failure, Success
-from ..config import AVAILABLE_MODELS, ONE_MIN_FEATURE_API_URL, RATELIMIT_DEFAULT
+from ..config import (
+    AVAILABLE_MODELS,
+    ONE_MIN_CHAT_API_URL,
+    ONE_MIN_FEATURE_API_URL,
+    RATELIMIT_DEFAULT,
+)
 from ..container import container
 from ..domain.ports import ChatRequest
 from ..infrastructure.circuit_breaker import api_circuit_breaker
@@ -394,18 +399,20 @@ async def chat_completions(
         "type": context.type,
         "model": chat_request.model,
         "promptObject": context.prompt_object,
+        # conversationId est dans context.prompt_object pour UNIFY_CHAT_WITH_AI
     }
-    if context.session_id:
-        payload["conversationId"] = context.session_id
 
+    api_url = ONE_MIN_FEATURE_API_URL if context.type == "IMAGE_GENERATOR" else ONE_MIN_CHAT_API_URL
     headers: dict[str, str] = {"API-KEY": api_key, "Content-Type": "application/json"}
 
     if not body.stream:
         # Mode non-streaming
-        return await _handle_non_streaming(payload, headers, body.model, prompt_token_count)
+        return await _handle_non_streaming(
+            payload, headers, body.model, prompt_token_count, api_url
+        )
     else:
         # Mode streaming
-        return await _handle_streaming(payload, headers, body.model, prompt_token_count)
+        return await _handle_streaming(payload, headers, body.model, prompt_token_count, api_url)
 
 
 async def _handle_non_streaming(
@@ -413,12 +420,13 @@ async def _handle_non_streaming(
     headers: dict[str, str],
     model: str,
     prompt_tokens: int,
+    api_url: str,
 ) -> JSONResponse:
     """Gère une requête non-streaming."""
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
-                ONE_MIN_FEATURE_API_URL,
+                api_url,
                 json=payload,
                 headers=headers,
             )
@@ -476,10 +484,11 @@ async def _handle_streaming(
     headers: dict[str, str],
     model: str,
     prompt_tokens: int,
+    api_url: str,
 ) -> StreamingResponse:
     """Gère une requête streaming avec SSE."""
 
-    streaming_url = f"{ONE_MIN_FEATURE_API_URL}?isStreaming=true"
+    streaming_url = f"{api_url}?isStreaming=true"
 
     async def stream_generator() -> AsyncGenerator[str, None]:
         """Générateur asynchrone pour le streaming SSE."""
