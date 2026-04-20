@@ -7,14 +7,15 @@ Avec WORKERS > 1, chaque worker a son propre store (pas de partage inter-process
 Pour un déploiement multi-worker, remplacer par un backend Redis.
 """
 
-import hashlib
 import threading
 from typing import Optional
+
+_MSG_KEY_MAX_LEN = 128
 
 
 class InMemorySessionStore:
     """
-    Clé de session : sha256(api_key:model:premier_message_user).
+    Clé de session : "{api_key}:{model}:{premier_message_tronqué}".
     Détection nouvelle conversation : len(messages) == 1 côté ChatService.
     """
 
@@ -35,8 +36,8 @@ class InMemorySessionStore:
             self._store.pop(key, None)
 
     def make_key(self, api_key: str, model: str, first_user_message: str) -> str:
-        raw = f"{api_key}:{model}:{first_user_message}"
-        return hashlib.sha256(raw.encode()).hexdigest()
+        msg = (first_user_message or "")[:_MSG_KEY_MAX_LEN]
+        return f"{api_key}:{model}:{msg}"
 
     def size(self) -> int:
         with self._lock:
