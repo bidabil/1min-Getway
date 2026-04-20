@@ -12,11 +12,12 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from ..config import ONE_MIN_CONVERSATION_API_URL as CONVERSATION_API_URL
+
 logger = logging.getLogger("1min-gateway.one-min-client")
 
 # Configuration
 API_TIMEOUT = 30
-CONVERSATION_API_URL = "https://api.1min.ai/api/conversations"
 
 
 class CircuitBreaker:
@@ -86,7 +87,7 @@ def _get_safe_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def create_1min_conversation(
     api_key: str,
     model: str,
-    conv_type: str = "CHAT_WITH_AI",
+    conv_type: str = "UNIFY_CHAT_WITH_AI",
     title: str = "Gateway Session",
     file_ids: list[str] | None = None,
     youtube_url: str | None = None,

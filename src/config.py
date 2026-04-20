@@ -30,6 +30,7 @@ ONE_MIN_BASE_URL: Final[str] = os.getenv("ONE_MIN_BASE_URL", "https://api.1min.a
 
 # Endpoints dérivés (automatiquement générés)
 ONE_MIN_FEATURE_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/features"
+ONE_MIN_CHAT_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/chat-with-ai"
 ONE_MIN_CONVERSATION_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/conversations"
 ONE_MIN_ASSET_API_URL: Final[str] = f"{ONE_MIN_BASE_URL}/api/assets"
 

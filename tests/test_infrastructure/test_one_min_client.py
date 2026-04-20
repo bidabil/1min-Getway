@@ -93,10 +93,16 @@ class TestCreate1minConversation:
         mock_post.return_value = mock_response
 
         result = create_fn(
-            api_key=valid_api_key, model="gpt-4o", conv_type="CHAT_WITH_AI", title="Test Session"
+            api_key=valid_api_key,
+            model="gpt-4o",
+            conv_type="UNIFY_CHAT_WITH_AI",
+            title="Test Session",
         )
 
         assert result == "test-uuid-123"
+        call_kwargs = mock_post.call_args
+        payload_sent = call_kwargs[1]["json"]
+        assert payload_sent["type"] == "UNIFY_CHAT_WITH_AI"
         mock_post.assert_called_once()
 
     @patch("src.infrastructure.one_min_client.requests.Session.post")

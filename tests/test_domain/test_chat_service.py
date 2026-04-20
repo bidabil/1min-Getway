@@ -64,9 +64,35 @@ class TestChatServiceContextResolution:
         context = chat_service.resolve_context(request)
 
         assert context is not None
-        assert context.type == "CHAT_WITH_AI"
-        assert context.session_id is None
+        assert context.type == "UNIFY_CHAT_WITH_AI"
         assert context.prompt_object["prompt"] == "Hello"
+
+    def test_resolve_context_creates_conversation_for_single_message(
+        self, chat_service, chat_request_factory, mock_conversation_service
+    ):
+        request = chat_request_factory(messages=[{"role": "user", "content": "Hello"}])
+
+        context = chat_service.resolve_context(request)
+
+        assert context.session_id == "test-uuid-12345678"
+        mock_conversation_service.create_conversation.assert_called_once()
+
+    def test_resolve_context_reuses_session_for_multi_turn(
+        self, chat_service, chat_request_factory, mock_session_store, mock_conversation_service
+    ):
+        mock_session_store.get.return_value = "existing-conv-id"
+        request = chat_request_factory(
+            messages=[
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi!"},
+                {"role": "user", "content": "How are you?"},
+            ]
+        )
+
+        context = chat_service.resolve_context(request)
+
+        assert context.session_id == "existing-conv-id"
+        mock_conversation_service.create_conversation.assert_not_called()
 
     def test_resolve_context_with_image(
         self, chat_service, chat_request_factory, mock_asset_service
@@ -85,22 +111,10 @@ class TestChatServiceContextResolution:
 
         context = chat_service.resolve_context(request)
 
-        assert context.type == "CHAT_WITH_IMAGE"
+        assert context.type == "UNIFY_CHAT_WITH_AI"
         assert len(context.image_paths) == 1
+        assert context.prompt_object["attachments"]["images"] == ["/uploads/test-image.png"]
         mock_asset_service.upload_image.assert_called_once()
-
-    def test_resolve_context_youtube_detection(
-        self, chat_service, chat_request_factory, mock_conversation_service, youtube_url
-    ):
-        request = chat_request_factory(
-            messages=[{"role": "user", "content": f"Summarize {youtube_url}"}]
-        )
-
-        context = chat_service.resolve_context(request)
-
-        assert context.type == "CHAT_WITH_YOUTUBE_VIDEO"
-        assert context.session_id is not None
-        mock_conversation_service.create_conversation.assert_called_once()
 
     def test_resolve_context_pdf_with_file_ids(
         self, chat_service, chat_request_factory, mock_conversation_service
@@ -112,9 +126,8 @@ class TestChatServiceContextResolution:
 
         context = chat_service.resolve_context(request)
 
-        assert context.type == "CHAT_WITH_PDF"
-        assert context.session_id is not None
-        mock_conversation_service.create_conversation.assert_called_once()
+        assert context.type == "UNIFY_CHAT_WITH_AI"
+        assert context.prompt_object["attachments"]["files"] == ["file-123", "file-456"]
 
     def test_resolve_context_extracts_text_from_multipart(self, chat_service, chat_request_factory):
         request = chat_request_factory(
@@ -134,11 +147,14 @@ class TestChatServiceContextResolution:
         assert "Hello" in context.prompt_object["prompt"]
         assert "world" in context.prompt_object["prompt"]
 
-    # CORRECTION: Créer un nouveau ChatService et ChatRequest pour ce test spécifique
     def test_resolve_context_handles_empty_messages(
-        self, mock_asset_service, mock_conversation_service, mock_token_service, valid_api_key
+        self,
+        mock_asset_service,
+        mock_conversation_service,
+        mock_token_service,
+        mock_session_store,
+        valid_api_key,
     ):
-        # Arrange - Créer un ChatService frais
         from src.domain.ports import ChatRequest
         from src.domain.services.chat_service import ChatService
 
@@ -146,21 +162,20 @@ class TestChatServiceContextResolution:
             asset_service=mock_asset_service,
             conversation_service=mock_conversation_service,
             token_service=mock_token_service,
+            session_store=mock_session_store,
             available_models=["gpt-4o"],
         )
 
         request = ChatRequest(
             api_key=valid_api_key,
             model="gpt-4o",
-            messages=[],  # Liste vide explicite
+            messages=[],
             stream=False,
             extra_params=None,
         )
 
-        # Act
         context = fresh_chat_service.resolve_context(request)
 
-        # Assert
         assert context.prompt_object["prompt"] == ""
 
 
@@ -251,14 +266,34 @@ class TestChatServiceWebSearch:
 
         context = chat_service.resolve_context(request)
 
-        assert context.prompt_object["webSearch"] is True
-        assert context.prompt_object["numOfSite"] == 5
-        assert context.prompt_object["maxWord"] == 1000
+        web_settings = context.prompt_object["settings"]["webSearchSettings"]
+        assert web_settings["webSearch"] is True
+        assert web_settings["numOfSite"] == 5
+        assert web_settings["maxWord"] == 1000
 
     def test_web_search_disabled_by_default(self, chat_service, chat_request_factory):
         request = chat_request_factory()
 
         context = chat_service.resolve_context(request)
 
-        assert context.prompt_object["webSearch"] is False
-        assert "numOfSite" not in context.prompt_object
+        web_settings = context.prompt_object["settings"]["webSearchSettings"]
+        assert web_settings["webSearch"] is False
+
+    def test_history_settings_present_by_default(self, chat_service, chat_request_factory):
+        request = chat_request_factory()
+
+        context = chat_service.resolve_context(request)
+
+        history_settings = context.prompt_object["settings"]["historySettings"]
+        assert "isMixed" in history_settings
+        assert "historyMessageLimit" in history_settings
+
+    def test_conversation_id_in_prompt_object(
+        self, chat_service, chat_request_factory, mock_conversation_service
+    ):
+        request = chat_request_factory(messages=[{"role": "user", "content": "Hello"}])
+
+        context = chat_service.resolve_context(request)
+
+        assert "conversationId" in context.prompt_object
+        assert context.prompt_object["conversationId"] == "test-uuid-12345678"
