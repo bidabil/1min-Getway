@@ -236,7 +236,7 @@ jobs:
           VERSION: ${{ needs.validate.outputs.version }}
           DEPLOYED_BY: ${{ github.actor }}
           SKIP_CHECK: ${{ github.event.inputs.skip_staging_check }}
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.PRODUCTION_SSH_HOST }}
           username: ${{ secrets.PRODUCTION_SSH_USER }}
