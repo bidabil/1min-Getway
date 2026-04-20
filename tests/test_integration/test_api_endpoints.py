@@ -206,6 +206,15 @@ class TestStreamingSSEParser:
 
     _CONV_RESPONSE = {"conversation": {"uuid": "test-conv-id-streaming"}}
 
+    @pytest.fixture(autouse=True)
+    def reset_circuit_breaker(self):
+        """Remet le circuit breaker à zéro avant/après chaque test."""
+        from src.infrastructure.circuit_breaker import api_circuit_breaker
+
+        api_circuit_breaker.reset()
+        yield
+        api_circuit_breaker.reset()
+
     def _make_stream_mock(self, lines: list[str]) -> AsyncMock:
         """Construit un mock httpx.AsyncClient pour le streaming."""
 
