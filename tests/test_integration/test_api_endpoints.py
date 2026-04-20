@@ -3,6 +3,7 @@
 Tests d'intégration pour les endpoints API FastAPI.
 """
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -198,6 +199,191 @@ class TestCircuitBreakerEndpoints:
 
         data = response.json()
         assert data["success"] is True
+
+
+class TestStreamingSSEParser:
+    """Tests pour le parser SSE du streaming (fix event: lines leaking)."""
+
+    _CONV_RESPONSE = {"conversation": {"uuid": "test-conv-id-streaming"}}
+
+    def _make_stream_mock(self, lines: list[str]) -> AsyncMock:
+        """Construit un mock httpx.AsyncClient pour le streaming."""
+
+        async def _aiter_lines():
+            for line in lines:
+                yield line
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.aiter_lines = _aiter_lines
+
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_client = AsyncMock()
+        mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+        mock_async_client_instance = AsyncMock()
+        mock_async_client_instance.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_async_client_instance.__aexit__ = AsyncMock(return_value=False)
+
+        return mock_async_client_instance
+
+    def _do_stream(self, client, auth_headers, streaming_chat_request, lines):
+        """Helper : effectue la requête streaming avec les lignes SSE données."""
+        mock_conv = MagicMock()
+        mock_conv.status_code = 200
+        mock_conv.headers = {"Content-Type": "application/json"}
+        mock_conv.json.return_value = self._CONV_RESPONSE
+
+        with patch("src.infrastructure.one_min_client._session.post", return_value=mock_conv):
+            with patch("src.api.routes.httpx.AsyncClient") as mock_cls:
+                mock_cls.return_value = self._make_stream_mock(lines)
+                return client.post(
+                    "/v1/chat/completions",
+                    json=streaming_chat_request,
+                    headers=auth_headers,
+                )
+
+    # ------------------------------------------------------------------
+    # 1. Les lignes "event:" ne doivent pas apparaître comme contenu
+    # ------------------------------------------------------------------
+    def test_event_lines_not_leaked_as_content(self, client, auth_headers, streaming_chat_request):
+        lines = [
+            "event: content",
+            'data: {"result": "Hello"}',
+            "event: done",
+            "data: [DONE]",
+        ]
+        response = self._do_stream(client, auth_headers, streaming_chat_request, lines)
+        assert response.status_code == 200
+        body = response.text
+        # L'événement SSE "event: content" ne doit pas apparaître comme texte
+        for chunk_raw in body.split("data: ")[1:]:
+            chunk_str = chunk_raw.strip()
+            if chunk_str in ("[DONE]", ""):
+                continue
+            data = json.loads(chunk_str)
+            content = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+            assert "event: content" not in content
+            assert "event: done" not in content
+
+    # ------------------------------------------------------------------
+    # 2. Champ "result" extrait correctement
+    # ------------------------------------------------------------------
+    def test_result_field_extracted(self, client, auth_headers, streaming_chat_request):
+        lines = ['data: {"result": "Bonjour"}', "data: [DONE]"]
+        response = self._do_stream(client, auth_headers, streaming_chat_request, lines)
+        assert response.status_code == 200
+        assert "Bonjour" in response.text
+
+    # ------------------------------------------------------------------
+    # 3. Champ "text" (fallback nouvelle API) extrait correctement
+    # ------------------------------------------------------------------
+    def test_text_field_fallback_extracted(self, client, auth_headers, streaming_chat_request):
+        lines = ['data: {"text": "Salut"}', "data: [DONE]"]
+        response = self._do_stream(client, auth_headers, streaming_chat_request, lines)
+        assert response.status_code == 200
+        assert "Salut" in response.text
+
+    # ------------------------------------------------------------------
+    # 4. Champ "content" extrait correctement
+    # ------------------------------------------------------------------
+    def test_content_field_extracted(self, client, auth_headers, streaming_chat_request):
+        lines = ['data: {"content": "Ciao"}', "data: [DONE]"]
+        response = self._do_stream(client, auth_headers, streaming_chat_request, lines)
+        assert response.status_code == 200
+        assert "Ciao" in response.text
+
+    # ------------------------------------------------------------------
+    # 5. [DONE] coté upstream met fin à l'itération (pas de contenu après)
+    # ------------------------------------------------------------------
+    def test_done_terminates_stream(self, client, auth_headers, streaming_chat_request):
+        lines = [
+            'data: {"result": "Fin"}',
+            "data: [DONE]",
+            'data: {"result": "Après DONE"}',  # doit être ignoré
+        ]
+        response = self._do_stream(client, auth_headers, streaming_chat_request, lines)
+        assert response.status_code == 200
+        assert "Fin" in response.text
+        assert "Après DONE" not in response.text
+
+    # ------------------------------------------------------------------
+    # 6. Les lignes sans préfixe "data:" ni "event:" sont ignorées
+    # ------------------------------------------------------------------
+    def test_unknown_lines_skipped(self, client, auth_headers, streaming_chat_request):
+        lines = [
+            "retry: 3000",
+            ": keep-alive",
+            'data: {"result": "OK"}',
+            "data: [DONE]",
+        ]
+        response = self._do_stream(client, auth_headers, streaming_chat_request, lines)
+        assert response.status_code == 200
+        assert "OK" in response.text
+        # Les lignes parasites ne doivent pas apparaître dans les chunks
+        for chunk_raw in response.text.split("data: ")[1:]:
+            chunk_str = chunk_raw.strip()
+            if chunk_str in ("[DONE]", ""):
+                continue
+            data = json.loads(chunk_str)
+            content = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+            assert "retry:" not in content
+            assert "keep-alive" not in content
+
+    # ------------------------------------------------------------------
+    # 7. Les lignes vides sont ignorées sans erreur
+    # ------------------------------------------------------------------
+    def test_empty_lines_ignored(self, client, auth_headers, streaming_chat_request):
+        lines = [
+            "",
+            "event: content",
+            "",
+            'data: {"result": "Texte"}',
+            "",
+            "data: [DONE]",
+        ]
+        response = self._do_stream(client, auth_headers, streaming_chat_request, lines)
+        assert response.status_code == 200
+        assert "Texte" in response.text
+
+    # ------------------------------------------------------------------
+    # 8. Plusieurs chunks sont tous transmis
+    # ------------------------------------------------------------------
+    def test_multiple_chunks_all_delivered(self, client, auth_headers, streaming_chat_request):
+        lines = [
+            "event: content",
+            'data: {"result": "Bonjour"}',
+            "event: content",
+            'data: {"result": " monde"}',
+            "event: content",
+            'data: {"result": " !"}',
+            "data: [DONE]",
+        ]
+        response = self._do_stream(client, auth_headers, streaming_chat_request, lines)
+        assert response.status_code == 200
+        body = response.text
+        assert "Bonjour" in body
+        assert " monde" in body
+        assert " !" in body
+
+    # ------------------------------------------------------------------
+    # 9. Réponse finale au format OpenAI avec finish_reason=stop
+    # ------------------------------------------------------------------
+    def test_final_chunk_has_finish_reason_stop(self, client, auth_headers, streaming_chat_request):
+        lines = ['data: {"result": "Hi"}', "data: [DONE]"]
+        response = self._do_stream(client, auth_headers, streaming_chat_request, lines)
+        assert response.status_code == 200
+        # Le dernier chunk avant [DONE] doit avoir finish_reason=stop
+        chunks = [
+            p.strip() for p in response.text.split("data: ") if p.strip() and p.strip() != "[DONE]"
+        ]
+        assert chunks, "Aucun chunk reçu"
+        last_chunk = json.loads(chunks[-1])
+        assert last_chunk["choices"][0]["finish_reason"] == "stop"
 
 
 class TestOpenAPIDocumentation:
