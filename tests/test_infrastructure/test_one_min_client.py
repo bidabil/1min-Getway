@@ -78,6 +78,17 @@ class TestCircuitBreaker:
 class TestCreate1minConversation:
     """Tests pour create_1min_conversation."""
 
+    @pytest.fixture(autouse=True)
+    def reset_circuit_breaker(self):
+        """Remet le circuit breaker à zéro avant/après chaque test."""
+        from src.infrastructure.one_min_client import _circuit_breaker
+
+        _circuit_breaker.failures = 0
+        _circuit_breaker.opened_at = None
+        yield
+        _circuit_breaker.failures = 0
+        _circuit_breaker.opened_at = None
+
     @pytest.fixture
     def create_fn(self):
         from src.infrastructure.one_min_client import create_1min_conversation
