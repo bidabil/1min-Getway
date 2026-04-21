@@ -60,7 +60,11 @@ _PARAM_RE = re.compile(r"<([\w.-]+)>(.*?)</\1>", re.DOTALL)
 
 
 def _parse_tool_calls(content: str) -> list[dict[str, Any]] | None:
-    """Parse les blocs <tool_call> XML dans une réponse de modèle."""
+    """Parse les blocs <tool_call> dans une réponse de modèle.
+
+    Essaie JSON en premier (format recommandé pour les types complexes),
+    puis XML en fallback pour la compatibilité.
+    """
     import uuid as _uuid
 
     matches = _TOOL_CALL_RE.findall(content)
@@ -68,9 +72,17 @@ def _parse_tool_calls(content: str) -> list[dict[str, Any]] | None:
         return None
 
     tool_calls = []
-    for name, params_xml in matches:
+    for name, params_raw in matches:
         name = name.strip()
-        params = {k.strip(): v.strip() for k, v in _PARAM_RE.findall(params_xml)}
+        params_raw = params_raw.strip()
+
+        # Essai JSON (format attendu pour arrays/objets imbriqués)
+        try:
+            params = json.loads(params_raw)
+        except (json.JSONDecodeError, ValueError):
+            # Fallback XML pour compatibilité
+            params = {k.strip(): v.strip() for k, v in _PARAM_RE.findall(params_raw)}
+
         tool_calls.append(
             {
                 "id": f"call_{_uuid.uuid4().hex[:24]}",

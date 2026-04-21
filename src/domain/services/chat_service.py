@@ -195,18 +195,23 @@ class ChatService:
 
     @staticmethod
     def _build_tools_injection(tools: list[dict[str, Any]]) -> str:
-        """Sérialise les tool definitions OpenAI en instructions XML pour le prompt."""
+        """Sérialise les tool definitions OpenAI en instructions XML+JSON pour le prompt.
+
+        Les paramètres sont encodés en JSON (pas XML) pour gérer correctement
+        les types complexes (arrays, objets imbriqués).
+        """
+        import json as _json
+
         lines = [
             "# Tool Use Instructions",
             "",
-            "You have access to the following tools. When you need to call a tool, output ONLY a <tool_call> XML block — no text before or after it.",
+            "You have access to the following tools. When you need to call a tool, output ONLY a <tool_call> block.",
+            "IMPORTANT: The content inside <parameters> MUST be valid JSON — not XML.",
             "",
             "Format:",
             "<tool_call>",
             "<name>tool_name</name>",
-            "<parameters>",
-            "<param_name>value</param_name>",
-            "</parameters>",
+            '<parameters>{"param1": "value1", "param2": ["item1", "item2"]}</parameters>',
             "</tool_call>",
             "",
             "Available tools:",
@@ -224,12 +229,69 @@ class ChatService:
             lines.append(f"### {name}")
             if description:
                 lines.append(description)
+
             if properties:
-                lines.append("Parameters:")
+                lines.append("Parameters (JSON):")
                 for pname, pinfo in properties.items():
                     req = " (required)" if pname in required_fields else ""
                     ptype = pinfo.get("type", "string")
                     pdesc = pinfo.get("description", "")
-                    lines.append(f"  - {pname} ({ptype}{req}): {pdesc}")
+                    # Pour les arrays, afficher la structure des items
+                    if ptype == "array" and "items" in pinfo:
+                        items_schema = pinfo["items"]
+                        lines.append(f"  - {pname} (array{req}): {pdesc}")
+                        lines.append(
+                            f"    Each item: {_json.dumps(items_schema, ensure_ascii=False)}"
+                        )
+                    elif ptype == "object" and "properties" in pinfo:
+                        lines.append(f"  - {pname} (object{req}): {pdesc}")
+                        lines.append(
+                            f"    Shape: {_json.dumps(pinfo['properties'], ensure_ascii=False)}"
+                        )
+                    else:
+                        lines.append(f"  - {pname} ({ptype}{req}): {pdesc}")
+
+                # Générer un exemple concret pour les tools avec des types complexes
+                example = ChatService._build_tool_example(name, properties, required_fields)
+                if example:
+                    lines.append("Example call:")
+                    lines.append("<tool_call>")
+                    lines.append(f"<name>{name}</name>")
+                    lines.append(
+                        f"<parameters>{_json.dumps(example, ensure_ascii=False)}</parameters>"
+                    )
+                    lines.append("</tool_call>")
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _build_tool_example(
+        name: str, properties: dict[str, Any], required_fields: list[str]
+    ) -> dict[str, Any] | None:
+        """Génère un exemple de paramètres pour un tool, utile pour les types complexes."""
+        has_complex = any(pinfo.get("type") in ("array", "object") for pinfo in properties.values())
+        if not has_complex:
+            return None
+
+        example: dict[str, Any] = {}
+        for pname, pinfo in properties.items():
+            if pname not in required_fields:
+                continue
+            ptype = pinfo.get("type", "string")
+            if ptype == "string":
+                example[pname] = f"<{pname}_value>"
+            elif ptype == "array":
+                items = pinfo.get("items", {})
+                item_props = items.get("properties", {})
+                if item_props:
+                    example[pname] = [{k: f"<{k}_value>" for k in item_props}]
+                else:
+                    example[pname] = ["<item>"]
+            elif ptype == "object":
+                sub_props = pinfo.get("properties", {})
+                example[pname] = {k: f"<{k}_value>" for k in sub_props}
+            elif ptype == "boolean":
+                example[pname] = True
+            elif ptype == "integer":
+                example[pname] = 0
+        return example if example else None
