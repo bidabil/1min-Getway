@@ -58,6 +58,13 @@ _TOOL_CALL_RE = re.compile(
 )
 _PARAM_RE = re.compile(r"<([\w.-]+)>(.*?)</\1>", re.DOTALL)
 
+_CRAWL_NOISE_RE = re.compile(r"^🌐 Crawling site https?://\S*\n?", re.MULTILINE)
+
+
+def _strip_crawl_noise(text: str) -> str:
+    """Supprime les lignes de crawling narratif que le modèle peut générer."""
+    return _CRAWL_NOISE_RE.sub("", text).lstrip("\n")
+
 
 def _parse_tool_calls(content: str) -> list[dict[str, Any]] | None:
     """Parse les blocs <tool_call> dans une réponse de modèle.
@@ -600,6 +607,8 @@ async def _handle_streaming(
                         except json.JSONDecodeError:
                             content_to_send = decoded_line
 
+                        content_to_send = _strip_crawl_noise(content_to_send)
+
                         if not content_to_send:
                             continue
 
@@ -778,6 +787,7 @@ def _transform_response(
             content = "Error: No response content."
             logger.warning(f"ADAPTER | resultObject vide ou invalide: {result_list}")
 
+        content = _strip_crawl_noise(content)
         completion_token = calculate_token(content, model_name)
 
         # Detect tool calls in the response
