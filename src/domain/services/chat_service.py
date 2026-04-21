@@ -94,9 +94,12 @@ class ChatService:
             )
 
         if system_content:
+            # Defang URLs to prevent 1min.ai from auto-crawling links found in system prompts
+            safe_system = system_content.replace("https://", "hxxps://").replace(
+                "http://", "hxxp://"
+            )
             raw_prompt = (
-                f"{raw_prompt}\n\n"
-                f"<system_instructions>\n{system_content}\n</system_instructions>"
+                f"{raw_prompt}\n\n" f"<system_instructions>\n{safe_system}\n</system_instructions>"
             )
 
         conv_type = self._determine_type(extra_params)
