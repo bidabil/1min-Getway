@@ -61,6 +61,7 @@ services:
   1min-gateway:
     image: billelattafi/1min-gateway:latest
     container_name: 1min-gateway-container
+    user: "1000:1000"
 
     # Labels Watchtower
     labels:
