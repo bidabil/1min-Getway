@@ -39,6 +39,9 @@ services:
       - WATCHTOWER_DEBUG=false
       - WATCHTOWER_TRACE=false
 
+      # Force Docker API v1.41+ (évite "client version 1.25 is too old")
+      - DOCKER_API_VERSION=1.41
+
       # Run une seule fois puis exit (désactiver pour mode continu)
       # - WATCHTOWER_RUN_ONCE=false
 
