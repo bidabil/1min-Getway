@@ -111,6 +111,8 @@ jobs:
             ci:
               - '.github/workflows/**'
               - '.github/actions/**'
+              - 'docker-compose*.yml'
+              - 'Dockerfile'
             tests:
               - 'tests/**'
               - 'pytest.ini'
