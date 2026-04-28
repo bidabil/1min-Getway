@@ -6,8 +6,8 @@ name: Dependabot Auto-Merge
 #
 # RÈGLES D'AUTO-MERGE:
 # Auto-merge : Patch dev deps
-# Auto-merge : Minor dev deps
-# Approve only : Patch prod deps  ← plus sûr, review humaine requise
+# Approve only : Minor dev deps  ← peut changer comportement (fixtures, API interne)
+# Approve only : Patch prod deps ← review humaine requise
 # Approve only : Minor prod deps
 # Approve only : Major (tous)
 # Fallback    : PR en limbo → commentaire explicatif
@@ -124,19 +124,22 @@ jobs:
           gh pr merge --auto --squash "$PR_URL"
 
       # ============================================================
-      # RÈGLE 2 : Auto-merge des mises à jour mineures dev
+      # RÈGLE 2 : Approve-only des mises à jour mineures dev
+      # Minor peut introduire des changements de comportement (fixtures, API interne) —
+      # 30 secondes de regard humain suffisent à détecter un problème.
       # ============================================================
-      - name: Auto-merge minor dev dependencies
+      - name: Approve (but do not merge) minor dev dependencies
         if: |
           needs.check-dependabot.outputs.update-type == 'version-update:semver-minor' &&
           needs.check-dependabot.outputs.dependency-type == 'direct:development'
         env:
-          PR_URL:       ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL:           ${{ github.event.pull_request.html_url }}
+          DEPENDENCY_NAMES: ${{ needs.check-dependabot.outputs.dependency-names }}
+          GITHUB_TOKEN:     ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Minor dev dependency — auto-approving and merging"
-          gh pr review --approve "$PR_URL"
-          gh pr merge --auto --squash "$PR_URL"
+          echo "Minor dev dependency — approving but NOT auto-merging (human review required)"
+          gh pr review --approve "$PR_URL" \
+            --body "CI passed. This is a **minor dev update** — please review before merging.\n\n📦 Updated: $DEPENDENCY_NAMES"
 
       # ============================================================
       # RÈGLE 3 : Approve-only des patchs prod (review humaine requise)
