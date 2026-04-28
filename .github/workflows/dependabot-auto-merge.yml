@@ -68,9 +68,11 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           # L'API GitHub retourne login="" pour les bots — utiliser .name à la place
-          NON_BOT=$(gh pr view "$PR_NUMBER" --json commits \
+          # --repo requis : pas de checkout dans ce job, gh ne peut pas inférer le contexte git
+          NON_BOT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json commits \
             --jq '[.commits[].authors[].name] | map(select(. != "dependabot[bot]")) | length')
           if [[ "$NON_BOT" -gt 0 ]]; then
             echo "::error::PR contains $NON_BOT commit(s) not authored by dependabot[bot] — aborting auto-merge"
