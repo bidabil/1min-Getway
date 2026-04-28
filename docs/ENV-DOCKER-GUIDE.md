@@ -99,6 +99,77 @@ The script handles:
 
 ---
 
+## 🔄 Persistance après reboot VPS
+
+Par défaut, les containers lancés via `docker compose up -d` ne redémarrent pas automatiquement si le **daemon Docker lui-même redémarre** (reboot VPS, `systemctl restart docker`, mise à jour système).
+
+### Étape 1 — Activer Docker au démarrage du système
+
+```bash
+sudo systemctl enable docker
+```
+
+### Étape 2 — Créer un service systemd pour relancer le compose au boot
+
+```bash
+sudo nano /etc/systemd/system/1min-gateway.service
+```
+
+Contenu du fichier :
+
+```ini
+[Unit]
+Description=1min-Gateway
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/root/1min-Getway
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Activer le service :
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable 1min-gateway.service
+```
+
+Vérifier :
+
+```bash
+sudo systemctl status 1min-gateway.service
+```
+
+> **Ordre de démarrage garanti :** boot → Docker → `docker compose up -d` → gateway opérationnel + Watchtower actif.
+
+### Diagnostic : pourquoi mon container a été tué ?
+
+```bash
+# Vérifier si c'était un OOM kill ou un arrêt Docker
+docker inspect 1min-gateway-container \
+  --format='OOMKilled: {{.State.OOMKilled}} | Exit: {{.State.ExitCode}} | Stopped: {{.State.FinishedAt}}'
+
+# Lire les logs système autour de l'heure d'arrêt
+sudo journalctl -u docker --since "YYYY-MM-DD HH:MM:00" --until "YYYY-MM-DD HH:MM:59" | tail -20
+```
+
+| Code de sortie | Cause probable |
+|---|---|
+| `137` + OOMKilled=true | Manque de RAM |
+| `137` + OOMKilled=false | Docker redémarré (SIGKILL externe) |
+| `1` | Erreur applicative (voir `docker logs`) |
+| `0` | Arrêt propre (manuel ou Watchtower) |
+
+---
+
 ## 🐳 Docker Configuration
 
 ### Docker Compose Features
@@ -295,6 +366,22 @@ echo $DOCKER_TOKEN | docker login -u $DOCKER_USERNAME --password-stdin
 docker inspect 1min-gateway | grep watchtower
 # Should show: "com.centurylinklabs.watchtower.enable=true"
 ```
+
+### Container tué après reboot VPS (Exit 137)
+
+```bash
+# Confirmer la cause
+docker inspect 1min-gateway-container \
+  --format='OOMKilled: {{.State.OOMKilled}} | Exit: {{.State.ExitCode}}'
+# → OOMKilled: false | Exit: 137 = Docker a redémarré
+
+# Vérifier les logs système
+sudo journalctl -u docker --since "1 hour ago" | grep -E "signal|shutdown|terminated"
+```
+
+**Fix :** suivre la section [Persistance après reboot VPS](#-persistance-après-reboot-vps).
+
+---
 
 ### "version is obsolete" Warning
 
