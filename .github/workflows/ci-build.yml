@@ -121,7 +121,7 @@ jobs:
             COMMIT=${{ inputs.sha_short }}
 
       - name: Trivy Scan
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.SCAN_IMAGE }}
           format: "sarif"
@@ -188,7 +188,7 @@ jobs:
       # Upload dans GitHub Security pour confirmer que l'image déployée = image scannée.
       - name: Trivy Scan (image pushée par digest)
         if: inputs.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY_GHCR }}/${{ env.GHCR_IMAGE }}@${{ steps.build.outputs.digest }}
           format: "sarif"
