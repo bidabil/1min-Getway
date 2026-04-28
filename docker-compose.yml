@@ -39,6 +39,9 @@ services:
       - WATCHTOWER_DEBUG=false
       - WATCHTOWER_TRACE=false
 
+      # Force Docker API v1.41+ (évite "client version 1.25 is too old")
+      - DOCKER_API_VERSION=1.41
+
       # Run une seule fois puis exit (désactiver pour mode continu)
       # - WATCHTOWER_RUN_ONCE=false
 
@@ -94,7 +97,7 @@ services:
 
     # Healthcheck (utilise l'endpoint racine /)
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:5001/ || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5001/')\" 2>/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
