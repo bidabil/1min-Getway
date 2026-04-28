@@ -1,0 +1,30 @@
+# osv-scanner.toml — Exceptions OSV documentées
+#
+# Ces CVEs affectent `pip` (le gestionnaire de paquets Python) installé
+# dans l'environnement CI par pip-audit. Ce n'est pas une dépendance
+# directe du projet et nous n'avons pas de contrôle sur sa version dans
+# le runner GitHub Actions.
+
+[[IgnoredVulns]]
+id = "GHSA-58qw-9mgm-455v"
+reason = "Affecte pip (outil CI), pas le code applicatif. Aucun fix disponible."
+
+[[IgnoredVulns]]
+id = "GHSA-6vgw-5pg2-w6jp"
+reason = "Affecte pip (outil CI), pas le code applicatif. Fix: pip>=26.0 hors de notre contrôle."
+
+[[IgnoredVulns]]
+id = "GHSA-4xh5-x5gv-qwph"
+reason = "Affecte pip (outil CI), pas le code applicatif. Fix: pip>=25.3 hors de notre contrôle."
+
+[[IgnoredVulns]]
+id = "GHSA-gpvv-69j7-gwj8"
+reason = "Affecte pip (outil CI), pas le code applicatif."
+
+[[IgnoredVulns]]
+id = "GHSA-5xp3-jfq3-5q8x"
+reason = "Affecte pip (outil CI), pas le code applicatif."
+
+[[IgnoredVulns]]
+id = "GHSA-mq26-g339-26xf"
+reason = "Affecte pip (outil CI), pas le code applicatif."
