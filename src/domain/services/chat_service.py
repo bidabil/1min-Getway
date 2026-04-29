@@ -217,6 +217,9 @@ class ChatService:
             '<parameters>{"param1": "value1", "param2": ["item1", "item2"]}</parameters>',
             "</tool_call>",
             "",
+            "If you receive a <tool_result> block, it contains the output of a tool you already called.",
+            "Use its content to answer the user's question directly — do NOT call the tool again.",
+            "",
             "Available tools:",
         ]
 
