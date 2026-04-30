@@ -53,10 +53,9 @@ logger = get_logger("1min-gateway.routes")
 # ============================================================================
 
 _TOOL_CALL_RE = re.compile(
-    r"<tool_call>\s*<name>\s*([\w.-]+)\s*</name>\s*<parameters>(.*?)</parameters>\s*</tool_call>",
+    r"FETCH:\s*([\w.-]+)\s*\nPARAMS:\s*(\{.*?\})\s*\nEND_FETCH",
     re.DOTALL | re.IGNORECASE,
 )
-_PARAM_RE = re.compile(r"<([\w.-]+)>(.*?)</\1>", re.DOTALL)
 
 _CRAWL_NOISE_RE = re.compile(r"^🌐 Crawling site https?://\S*\n?", re.MULTILINE)
 
@@ -67,11 +66,7 @@ def _strip_crawl_noise(text: str) -> str:
 
 
 def _parse_tool_calls(content: str) -> list[dict[str, Any]] | None:
-    """Parse les blocs <tool_call> dans une réponse de modèle.
-
-    Essaie JSON en premier (format recommandé pour les types complexes),
-    puis XML en fallback pour la compatibilité.
-    """
+    """Parse les blocs FETCH/END_FETCH dans une réponse de modèle."""
     import uuid as _uuid
 
     matches = _TOOL_CALL_RE.findall(content)
@@ -83,12 +78,10 @@ def _parse_tool_calls(content: str) -> list[dict[str, Any]] | None:
         name = name.strip()
         params_raw = params_raw.strip()
 
-        # Essai JSON (format attendu pour arrays/objets imbriqués)
         try:
             params = json.loads(params_raw)
         except (json.JSONDecodeError, ValueError):
-            # Fallback XML pour compatibilité
-            params = {k.strip(): v.strip() for k, v in _PARAM_RE.findall(params_raw)}
+            params = {}
 
         tool_calls.append(
             {
@@ -466,6 +459,21 @@ async def chat_completions(
 
     has_tools = bool(body.tools)
 
+    if has_tools:
+        last_role = messages[-1]["role"] if messages else "unknown"
+        conv_id = context.prompt_object.get("conversationId", "none")
+        tool_names = [t.get("function", t).get("name") for t in body.tools]
+        full_prompt = context.prompt_object.get("prompt", "")
+        logger.info(
+            f"TOOL_CYCLE | turn_role={last_role} model={body.model} stream={body.stream}"
+            f" tools={tool_names} conv_id={conv_id}"
+        )
+        logger.info(
+            f"TOOL_SCHEMAS | {json.dumps([t.get('function', t) for t in body.tools], ensure_ascii=False)[:600]}"
+        )
+        logger.info(f"PROMPT_TO_1MIN | {full_prompt[:800]}")
+        logger.debug(f"PROMPT_TO_1MIN_FULL | {full_prompt}")
+
     if not body.stream:
         # Mode non-streaming
         return await _handle_non_streaming(
@@ -499,6 +507,7 @@ async def _handle_non_streaming(
 
             # Transformation de la réponse
             data = response.json()
+            logger.info(f"UPSTREAM_RESPONSE | {json.dumps(data)[:800]}")
             transformed = _transform_response(data, model, prompt_tokens)
 
             return JSONResponse(content=transformed, status_code=200)
@@ -658,8 +667,12 @@ async def _handle_streaming(
 
         # Post-stream : traitement tool calls si nécessaire
         if has_tools:
+            logger.info(f"STREAM_MODEL_RESPONSE | {all_chunks_text[:600]!r}")
             tool_calls = _parse_tool_calls(all_chunks_text)
             if tool_calls:
+                logger.info(
+                    f"STREAM_TOOL_CALLS_DETECTED | {[tc['function']['name'] for tc in tool_calls]}"
+                )
                 # Émettre les tool_calls au format streaming OpenAI
                 tc_chunk = {
                     "id": chat_id,
@@ -717,6 +730,7 @@ async def _handle_streaming(
 
                 yield f"data: {json.dumps({'id': chat_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'tool_calls'}]})}\n\n"
             else:
+                logger.info("STREAM_TOOL_CALLS_DETECTED | none")
                 # Pas de tool calls : émettre les chunks bufférisés
                 for chunk in buffered_chunks:
                     yield chunk
@@ -791,8 +805,10 @@ def _transform_response(
         completion_token = calculate_token(content, model_name)
 
         # Detect tool calls in the response
+        logger.info(f"MODEL_RESPONSE | {content[:600]!r}")
         tool_calls = _parse_tool_calls(content)
         if tool_calls:
+            logger.info(f"TOOL_CALLS_DETECTED | {[tc['function']['name'] for tc in tool_calls]}")
             message: dict[str, Any] = {
                 "role": "assistant",
                 "content": None,
@@ -800,6 +816,7 @@ def _transform_response(
             }
             finish_reason = "tool_calls"
         else:
+            logger.info("TOOL_CALLS_DETECTED | none")
             message = {"role": "assistant", "content": content}
             finish_reason = "stop"
 
