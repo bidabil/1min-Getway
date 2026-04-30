@@ -457,19 +457,20 @@ async def chat_completions(
     api_url = ONE_MIN_FEATURE_API_URL if context.type == "IMAGE_GENERATOR" else ONE_MIN_CHAT_API_URL
     headers: dict[str, str] = {"API-KEY": api_key, "Content-Type": "application/json"}
 
-    has_tools = bool(body.tools)
+    tools = body.tools or []
+    has_tools = bool(tools)
 
-    if has_tools:
+    if tools:
         last_role = messages[-1]["role"] if messages else "unknown"
         conv_id = context.prompt_object.get("conversationId", "none")
-        tool_names = [t.get("function", t).get("name") for t in body.tools]
+        tool_names = [t.get("function", t).get("name") for t in tools]
         full_prompt = context.prompt_object.get("prompt", "")
         logger.info(
             f"TOOL_CYCLE | turn_role={last_role} model={body.model} stream={body.stream}"
             f" tools={tool_names} conv_id={conv_id}"
         )
         logger.info(
-            f"TOOL_SCHEMAS | {json.dumps([t.get('function', t) for t in body.tools], ensure_ascii=False)[:600]}"
+            f"TOOL_SCHEMAS | {json.dumps([t.get('function', t) for t in tools], ensure_ascii=False)[:600]}"
         )
         logger.info(f"PROMPT_TO_1MIN | {full_prompt[:800]}")
         logger.debug(f"PROMPT_TO_1MIN_FULL | {full_prompt}")

@@ -325,7 +325,7 @@ class TestChatServiceToolCalling:
 
         prompt = context.prompt_object["prompt"]
         assert "read_file" in prompt
-        assert "<tool_call>" in prompt
+        assert "FETCH:" in prompt
         assert "path (string" in prompt
         assert "(required)" in prompt
 
@@ -340,7 +340,7 @@ class TestChatServiceToolCalling:
         context = chat_service.resolve_context(request)
 
         prompt = context.prompt_object["prompt"]
-        assert "<tool_result>" in prompt
+        assert "[DATA_RESULT]" in prompt
         assert "file1.txt" in prompt
 
     def test_build_tools_injection_format(self):
@@ -366,7 +366,8 @@ class TestChatServiceToolCalling:
         result = ChatService._build_tools_injection(tools)
 
         assert "write_file" in result
-        assert "<tool_call>" in result
+        assert "FETCH:" in result
+        assert "END_FETCH" in result
         assert "path (string, required)" in result or "path (string" in result
         assert "content (string" in result
 
@@ -393,12 +394,12 @@ class TestChatServiceToolCalling:
         prompt = context.prompt_object["prompt"]
         assert "You are a helpful assistant." in prompt
         assert "search" in prompt
-        assert "<tool_call>" in prompt
+        assert "FETCH:" in prompt
 
     def test_no_tools_no_injection(self, chat_service, chat_request_factory):
         request = chat_request_factory(messages=[{"role": "user", "content": "Hello"}])
         context = chat_service.resolve_context(request)
 
         prompt = context.prompt_object["prompt"]
-        assert "<tool_call>" not in prompt
-        assert "Tool Use Instructions" not in prompt
+        assert "FETCH:" not in prompt
+        assert "Data Retrieval Protocol" not in prompt

@@ -425,9 +425,7 @@ class TestToolCalling:
         mock_response.json.return_value = {
             "aiRecord": {
                 "aiRecordDetail": {
-                    "resultObject": [
-                        "<tool_call><name>read_file</name><parameters><path>/test.txt</path></parameters></tool_call>"
-                    ]
+                    "resultObject": ['FETCH: read_file\nPARAMS: {"path": "/test.txt"}\nEND_FETCH']
                 }
             }
         }
@@ -441,7 +439,7 @@ class TestToolCalling:
         assert response.status_code != 422
 
     def test_tool_call_response_returns_tool_calls_format(self, client, auth_headers):
-        """Quand la réponse contient un <tool_call>, finish_reason doit être 'tool_calls'."""
+        """Quand la réponse contient un bloc FETCH, finish_reason doit être 'tool_calls'."""
         payload = {
             "model": "gpt-4o",
             "messages": [{"role": "user", "content": "Read file.txt"}],
@@ -467,9 +465,7 @@ class TestToolCalling:
         mock_response.json.return_value = {
             "aiRecord": {
                 "aiRecordDetail": {
-                    "resultObject": [
-                        "<tool_call><name>read_file</name><parameters><path>/file.txt</path></parameters></tool_call>"
-                    ]
+                    "resultObject": ['FETCH: read_file\nPARAMS: {"path": "/file.txt"}\nEND_FETCH']
                 }
             }
         }
@@ -492,7 +488,7 @@ class TestToolCalling:
             assert args["path"] == "/file.txt"
 
     def test_normal_response_without_tool_calls(self, client, auth_headers):
-        """Sans <tool_call> dans la réponse, finish_reason reste 'stop'."""
+        """Sans bloc FETCH dans la réponse, finish_reason reste 'stop'."""
         payload = {
             "model": "gpt-4o",
             "messages": [{"role": "user", "content": "Say hello"}],
@@ -526,10 +522,10 @@ class TestToolCalling:
             assert data["choices"][0]["message"]["content"] == "Hello! How can I help you today?"
 
     def test_parse_tool_call_single(self):
-        """_parse_tool_calls détecte un bloc <tool_call> simple."""
+        """_parse_tool_calls détecte un bloc FETCH simple."""
         from src.api.routes import _parse_tool_calls
 
-        content = "<tool_call><name>read_file</name><parameters><path>/home/test.txt</path></parameters></tool_call>"
+        content = 'FETCH: read_file\nPARAMS: {"path": "/home/test.txt"}\nEND_FETCH'
         result = _parse_tool_calls(content)
 
         assert result is not None
@@ -544,7 +540,9 @@ class TestToolCalling:
         """_parse_tool_calls gère plusieurs paramètres."""
         from src.api.routes import _parse_tool_calls
 
-        content = "<tool_call><name>write_file</name><parameters><path>/out.txt</path><content>hello world</content></parameters></tool_call>"
+        content = (
+            'FETCH: write_file\nPARAMS: {"path": "/out.txt", "content": "hello world"}\nEND_FETCH'
+        )
         result = _parse_tool_calls(content)
 
         assert result is not None
@@ -553,12 +551,12 @@ class TestToolCalling:
         assert args["content"] == "hello world"
 
     def test_parse_tool_calls_multiple_blocks(self):
-        """_parse_tool_calls détecte plusieurs tool_calls dans une réponse."""
+        """_parse_tool_calls détecte plusieurs blocs FETCH dans une réponse."""
         from src.api.routes import _parse_tool_calls
 
         content = (
-            "<tool_call><name>read_file</name><parameters><path>/a</path></parameters></tool_call>"
-            "<tool_call><name>write_file</name><parameters><path>/b</path></parameters></tool_call>"
+            'FETCH: read_file\nPARAMS: {"path": "/a"}\nEND_FETCH\n'
+            'FETCH: write_file\nPARAMS: {"path": "/b"}\nEND_FETCH'
         )
         result = _parse_tool_calls(content)
 
