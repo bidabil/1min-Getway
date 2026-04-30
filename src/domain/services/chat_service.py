@@ -84,7 +84,7 @@ class ChatService:
 
         # Wrap tool results so the model understands this is a tool execution output
         if last_message.get("role") == "tool":
-            raw_prompt = f"<tool_result>\n{raw_prompt}\n</tool_result>"
+            raw_prompt = f"[DATA_RESULT]\n{raw_prompt}\n[/DATA_RESULT]"
 
         # Inject tool definitions into system instructions when tools are present
         if tools := extra_params.get("tools"):
@@ -206,21 +206,19 @@ class ChatService:
         import json as _json
 
         lines = [
-            "# Tool Use Instructions",
+            "## Data Retrieval Protocol",
             "",
-            "You have access to the following tools. When you need to call a tool, output ONLY a <tool_call> block.",
-            "IMPORTANT: The content inside <parameters> MUST be valid JSON — not XML.",
+            "When the user's question requires real-time data from an external source,",
+            "respond with EXACTLY this format and nothing else:",
             "",
-            "Format:",
-            "<tool_call>",
-            "<name>tool_name</name>",
-            '<parameters>{"param1": "value1", "param2": ["item1", "item2"]}</parameters>',
-            "</tool_call>",
+            "FETCH: source_name",
+            'PARAMS: {"key": "value"}',
+            "END_FETCH",
             "",
-            "If you receive a <tool_result> block, it contains the output of a tool you already called.",
-            "Use its content to answer the user's question directly — do NOT call the tool again.",
+            "When you receive a [DATA_RESULT] block, use its content to answer the user directly.",
+            "Do NOT request the same data again.",
             "",
-            "Available tools:",
+            "Available data sources:",
         ]
 
         for tool in tools:
@@ -260,13 +258,10 @@ class ChatService:
                 # Générer un exemple concret pour les tools avec des types complexes
                 example = ChatService._build_tool_example(name, properties, required_fields)
                 if example:
-                    lines.append("Example call:")
-                    lines.append("<tool_call>")
-                    lines.append(f"<name>{name}</name>")
-                    lines.append(
-                        f"<parameters>{_json.dumps(example, ensure_ascii=False)}</parameters>"
-                    )
-                    lines.append("</tool_call>")
+                    lines.append("Example:")
+                    lines.append(f"FETCH: {name}")
+                    lines.append(f"PARAMS: {_json.dumps(example, ensure_ascii=False)}")
+                    lines.append("END_FETCH")
 
         return "\n".join(lines)
 
