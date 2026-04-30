@@ -475,6 +475,21 @@ async def chat_completions(
         logger.info(f"PROMPT_TO_1MIN | {full_prompt[:800]}")
         logger.debug(f"PROMPT_TO_1MIN_FULL | {full_prompt}")
 
+    if has_tools:
+        last_role = messages[-1]["role"] if messages else "unknown"
+        conv_id = context.prompt_object.get("conversationId", "none")
+        tool_names = [t.get("function", t).get("name") for t in body.tools]
+        full_prompt = context.prompt_object.get("prompt", "")
+        logger.info(
+            f"TOOL_CYCLE | turn_role={last_role} model={body.model} stream={body.stream}"
+            f" tools={tool_names} conv_id={conv_id}"
+        )
+        logger.info(
+            f"TOOL_SCHEMAS | {json.dumps([t.get('function', t) for t in body.tools], ensure_ascii=False)[:600]}"
+        )
+        logger.info(f"PROMPT_TO_1MIN | {full_prompt[:800]}")
+        logger.debug(f"PROMPT_TO_1MIN_FULL | {full_prompt}")
+
     if not body.stream:
         # Mode non-streaming
         return await _handle_non_streaming(
