@@ -53,7 +53,7 @@ logger = get_logger("1min-gateway.routes")
 # ============================================================================
 
 _TOOL_CALL_RE = re.compile(
-    r"FETCH:\s*([\w.-]+)\s*\nPARAMS:\s*(\{.*?\})\s*\nEND_FETCH",
+    r"FETCH:\s*([\w.-]+?)\s*PARAMS:\s*(\{.*?\})\s+END_FETCH",
     re.DOTALL | re.IGNORECASE,
 )
 

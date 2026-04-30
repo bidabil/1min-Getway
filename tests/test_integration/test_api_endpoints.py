@@ -565,6 +565,32 @@ class TestToolCalling:
         assert result[0]["function"]["name"] == "read_file"
         assert result[1]["function"]["name"] == "write_file"
 
+    def test_parse_tool_call_no_newline_between_name_and_params(self):
+        """_parse_tool_calls gère le cas où le modèle colle le nom et PARAMS sans séparateur."""
+        from src.api.routes import _parse_tool_calls
+
+        content = 'FETCH: web_fetchPARAMS: {"url": "https://wttr.in/Marseille"}\nEND_FETCH'
+        result = _parse_tool_calls(content)
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["function"]["name"] == "web_fetch"
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args["url"] == "https://wttr.in/Marseille"
+
+    def test_parse_tool_call_with_preamble_text(self):
+        """_parse_tool_calls détecte un bloc FETCH précédé de texte narratif."""
+        from src.api.routes import _parse_tool_calls
+
+        content = (
+            "I'll check the weather for you.\n\n"
+            'FETCH: weatherPARAMS: {"location": "Marseille"}\nEND_FETCH'
+        )
+        result = _parse_tool_calls(content)
+
+        assert result is not None
+        assert result[0]["function"]["name"] == "weather"
+
     def test_parse_returns_none_for_plain_text(self):
         """_parse_tool_calls retourne None si pas de tool_call."""
         from src.api.routes import _parse_tool_calls
