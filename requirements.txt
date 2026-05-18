@@ -18,8 +18,8 @@ requests==2.33.1
 httpx==0.28.1
 
 # --- Tokenization ---
-tiktoken==0.12.0
-mistral_common==1.11.0
+tiktoken==0.13.0
+mistral_common==1.11.2
 
 # --- File Type Detection ---
 filetype==1.2.0
