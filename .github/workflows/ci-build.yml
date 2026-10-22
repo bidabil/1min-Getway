@@ -38,7 +38,7 @@ env:
   REGISTRY_GHCR: ghcr.io
   # IMAGE_NAME uses DOCKER_USERNAME (DockerHub handle) — distinct from github.repository_owner (GitHub handle)
   IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/1min-gateway
-  GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
+  GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway  # owner must be lowercase (OCI)
   # SCAN_IMAGE is a local-only tag used for Trivy/Grype scans (never pushed).
   # Using a hardcoded name avoids a broken tag when DOCKER_USERNAME is unavailable (e.g. Dependabot PRs).
   SCAN_IMAGE: local/1min-gateway:scan

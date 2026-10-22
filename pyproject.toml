@@ -1,6 +1,5 @@
-
 # ==============================================================
-# pyproject.toml - Configuration centralisée des outils
+# pyproject.toml - 1min-Gateway
 # ==============================================================
 
 [build-system]
@@ -9,143 +8,99 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "1min-gateway"
-version = "1.1.0"
-description = "1min-Gateway: Intelligent API Gateway for AI models"
-authors = [
-    {name = "Billel Attafi", email = "billel@example.com"}
-]
+version = "2.0.0"
+description = "OpenAI- and Anthropic-compatible gateway and MCP server for 1min.ai"
+authors = [{ name = "Billel Attafi" }]
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
-keywords = ["gateway", "api", "ai", "llm", "proxy"]
+license = { text = "MIT" }
+keywords = ["gateway", "api", "ai", "llm", "proxy", "openai", "anthropic", "mcp", "1min.ai"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gateway = ["infrastructure/one_min/data/*.json", "py.typed"]
+
 # ==============================================================
-# PYTEST - Test framework
+# PYTEST
 # ==============================================================
 [tool.pytest.ini_options]
-minversion = "7.0"
+minversion = "8.0"
 testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
+pythonpath = ["src"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = [
-    "-ra",
-    "--strict-markers",
-    "--strict-config",
-    "--showlocals",
-    "--tb=short",
-    "--cov=src",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
-    "--cov-fail-under=75",
-]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
-    "asyncio: marks tests as async tests",
-]
-filterwarnings = [
-    "ignore::FutureWarning:mistral_common.*",
-    "ignore::DeprecationWarning:httpx.*",
+    "integration: tests that exercise the HTTP application end to end (upstream mocked)",
 ]
 
 [tool.coverage.run]
-source = ["src"]
-omit = [
-    "tests/*",
-    "**/__pycache__/*",
-    "**/.venv/*",
-    "**/venv/*",
-    "setup.py",
-]
+source = ["src/gateway"]
+branch = true
 
 [tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 85
 exclude_lines = [
     "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
-    "@abstractmethod",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
 ]
 
 # ==============================================================
-# MYPY - Static type checker
+# MYPY
 # ==============================================================
 [tool.mypy]
 python_version = "3.12"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
+mypy_path = "src"
+strict = true
+warn_unreachable = true
 ignore_missing_imports = true
-exclude = [
-    "venv",
-    ".venv",
-    "tests",
-    "logs",
-]
+exclude = ["venv", ".venv", "tests"]
 
 # ==============================================================
-# RUFF - Linter moderne (remplace Flake8)
+# RUFF
 # ==============================================================
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-exclude = [
-    ".git",
-    ".venv",
-    "venv",
-    "__pycache__",
-    "logs",
-    "dist",
-    "build",
-]
+src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes
-    "I",      # isort
-    "B",      # flake8-bugbear
-    "C4",     # flake8-comprehensions
-    "UP",     # pyupgrade
-    "S",      # flake8-bandit (sécurité)
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "S",    # flake8-bandit
+    "ASYNC", # flake8-async
 ]
 ignore = [
-    "E501",   # line too long (géré par formatter)
-    "B008",   # function calls in argument defaults
-    "UP007",  # Union[X, Y] -> X | Y (garde compatibilité)
+    "E501", # line length is handled by the formatter
+    "B008", # FastAPI dependencies are function calls in defaults
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
-"tests/*" = ["S101", "S105", "S106", "B017"]
-"main.py" = ["S104"]  # Binding to all interfaces needed for Docker
-"src/config.py" = ["S104", "S105"]  # Default values, overridden by env vars
+"tests/**" = ["S101", "S105", "S106", "S108"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gateway"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-
-# ==============================================================
-# COMMITIZEN
-# ==============================================================
-[tool.commitizen]
-name = "cz_gitmoji"
-version = "1.1.0"
-tag_format = "v$version"
-update_changelog_on_bump = true
-bump_message = "🔖 chore(release): bump version $current_version → $new_version [skip ci]"

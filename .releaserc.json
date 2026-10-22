@@ -69,7 +69,7 @@
             "label": "Changelog"
           }
         ],
-        "successComment": "🎉 This ${issue.pull_request ? 'PR is included' : 'issue has been resolved'} in version ${nextRelease.version} 🎉\n\nThe release is available on:\n- 🐳 [Docker Hub](https://hub.docker.com/r/billelattafi/1min-gateway/tags?name=${nextRelease.version})\n- 📦 [GitHub Container Registry](https://github.com/billelattafi/1min-gateway/pkgs/container/1min-gateway)\n\nYour **Watchtower** instance will automatically pull the update within 5 minutes.",
+        "successComment": "🎉 This ${issue.pull_request ? 'PR is included' : 'issue has been resolved'} in version ${nextRelease.version} 🎉\n\nThe release is available on:\n- 🐳 [Docker Hub](https://hub.docker.com/r/billelattafi/1min-gateway/tags?name=${nextRelease.version})\n- 📦 [GitHub Container Registry](https://github.com/bidabil/1min-Getway/pkgs/container/1min-gateway)\n\nYour **Watchtower** instance will automatically pull the update within 5 minutes.",
         "failComment": false,
         "releasedLabels": ["released"]
       }

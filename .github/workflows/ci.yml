@@ -51,8 +51,6 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
-  RUFF_VERSION: "0.8.0"
-  MIN_COVERAGE: 75
 
 permissions:
   contents: read
@@ -107,7 +105,8 @@ jobs:
             deps:
               - 'requirements*.txt'
               - 'pyproject.toml'
-              - 'poetry.lock'
+              - 'Dockerfile'
+              - '.dockerignore'
             ci:
               - '.github/workflows/**'
               - '.github/actions/**'
@@ -137,12 +136,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ruff-${{ env.RUFF_VERSION }}
-          restore-keys: ruff-
-      - run: pip install ruff==${{ env.RUFF_VERSION }}
+      - name: Install ruff (version pinned in requirements-dev.txt)
+        run: pip install "$(grep -E '^ruff==' requirements-dev.txt)"
       - name: Ruff Lint
         run: ruff check . --output-format=github
       - name: Ruff Format
@@ -169,9 +164,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
-      - run: pip install -r requirements.txt mypy types-requests types-cachetools
-      - name: MyPy (Strict)
-        run: mypy src/ --ignore-missing-imports --strict --pretty
+      - run: pip install -r requirements-dev.txt
+      - name: MyPy (strict, configured in pyproject.toml)
+        run: mypy src --pretty
 
   # ==============================================================
   # STAGE 2: TESTING (Matrix)
@@ -192,15 +187,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.12", "3.13"]
         include:
-          - { python-version: "3.12", os: ubuntu-latest,  coverage: true,  benchmark: true  }
-          - { python-version: "3.12", os: windows-latest, coverage: false, benchmark: false }
-    env:
-      ONE_MIN_AI_API_KEY: "test-api-key-ci"      # pragma: allowlist secret
-      APP_ENV: "testing"
-      DEBUG: "True"
-      RATELIMIT_ENABLED: "False"
+          - { python-version: "3.12", os: ubuntu-latest,  coverage: true  }
+          - { python-version: "3.12", os: windows-latest, coverage: false }
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -214,29 +204,20 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-xdist pytest-timeout pytest-benchmark pytest-randomly pytest-asyncio
+          pip install -r requirements-dev.txt
 
-      - name: Run Tests with Coverage
+      # Tests are hermetic: 1min.ai is faked in memory and sockets are blocked.
+      - name: Run Tests with Coverage (threshold in pyproject.toml)
         if: matrix.coverage
         shell: bash
         run: |
-          pytest tests/ -v \
-            --cov=src --cov-report=term-missing \
-            --cov-report=xml:coverage.xml --cov-report=html:htmlcov \
-            --cov-fail-under=${{ env.MIN_COVERAGE }} \
-            --junitxml=test-results.xml --timeout=60 \
-            -n auto --randomly-seed=12345
+          pytest -v --cov=src/gateway --cov-report=term-missing \
+            --cov-report=xml:coverage.xml --junitxml=test-results.xml
 
       - name: Run Tests (no coverage)
         if: ${{ !matrix.coverage }}
         shell: bash
-        run: pytest tests/ -v --junitxml=test-results.xml --timeout=60 -n auto
-
-      - name: Run Benchmarks
-        if: matrix.benchmark && github.event_name == 'pull_request'
-        run: pytest tests/ -v --benchmark-only --benchmark-json=benchmark.json --benchmark-compare || true
-        continue-on-error: true
+        run: pytest -v --junitxml=test-results.xml
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v7
@@ -246,8 +227,6 @@ jobs:
           path: |
             test-results.xml
             coverage.xml
-            htmlcov/
-            benchmark.json
           retention-days: 7
 
       - name: Upload Coverage to Codecov

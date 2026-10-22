@@ -21,7 +21,7 @@ concurrency:
 
 env:
   REGISTRY_GHCR: ghcr.io
-  GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
+  GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway  # owner must be lowercase (OCI)
   STAGING_URL: ${{ vars.STAGING_URL }}
 
 permissions:
@@ -129,13 +129,14 @@ jobs:
 
           # Vérifier que l'image existe avant de tenter le déploiement
           # (évite un déploiement silencieux avec une ref inexistante sur workflow_dispatch)
-          if ! docker manifest inspect "$IMAGE_TAG" > /dev/null 2>&1; then
+          if ! docker buildx imagetools inspect "$IMAGE_TAG" > /dev/null 2>&1; then
             echo "::error::Image not found in registry: $IMAGE_TAG"
             echo "Ensure CI has built and pushed the image for commit ${SHA_SHORT} before running CD manually."
             exit 1
           fi
 
-          DIGEST=$(docker manifest inspect "$IMAGE_TAG" --verbose 2>/dev/null | jq -r '.Descriptor.digest' || echo "")
+          # Digest of the multi-arch index (the signed artifact)
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE_TAG" --format '{{json .Manifest}}' | jq -r '.digest' || echo "")
           if [[ -n "$DIGEST" ]]; then
             echo "digest=${IMAGE_BASE}@${DIGEST}" >> $GITHUB_OUTPUT
           else
@@ -210,8 +211,8 @@ jobs:
       - name: Smoke Test Summary
         run: |
           PASSED=0
-          [[ "${{ steps.health.outputs.health_ok }}" == "true" ]] && ((PASSED++))
-          [[ "${{ steps.version.outputs.version_ok }}" == "true" ]] && ((PASSED++))
+          if [[ "${{ steps.health.outputs.health_ok }}" == "true" ]]; then PASSED=$((PASSED+1)); fi
+          if [[ "${{ steps.version.outputs.version_ok }}" == "true" ]]; then PASSED=$((PASSED+1)); fi
           echo "Smoke tests passed: $PASSED/2" >> $GITHUB_STEP_SUMMARY
 
           if [[ "${{ steps.health.outputs.health_ok }}" != "true" ]]; then

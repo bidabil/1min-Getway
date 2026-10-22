@@ -1,0 +1,272 @@
+{
+  "note": "Curated from https://docs.1min.ai (2026-10). Any other feature type documented by 1min.ai can be called through POST /v1/features/{type}; this catalog only provides discovery and defaults.",
+  "features": [
+    {
+      "type": "IMAGE_GENERATOR",
+      "category": "image",
+      "title": "Image generator",
+      "description": "Generate images from a text prompt. Fields depend on the model (gpt-image uses size/quality, Flux uses aspect_ratio, Magic Art uses aspect_width/aspect_height).",
+      "models": ["gpt-image-1", "gpt-image-2", "gpt-image-1-mini", "black-forest-labs/flux-schnell", "magic-art_7_0"],
+      "fields": [
+        {"name": "prompt", "type": "string", "required": true, "description": "Description of the image."},
+        {"name": "n", "type": "integer", "description": "Number of images (gpt-image: 1-10)."},
+        {"name": "size", "type": "string", "description": "gpt-image: WIDTHxHEIGHT, e.g. 1024x1024, 1536x1024, 1024x1536."},
+        {"name": "quality", "type": "string", "enum": ["low", "medium", "high"], "description": "gpt-image quality."},
+        {"name": "aspect_ratio", "type": "string", "enum": ["1:1", "16:9", "9:16", "3:2", "2:3", "4:5", "5:4"], "description": "Flux / Stable Diffusion / Ideogram."},
+        {"name": "output_format", "type": "string", "enum": ["png", "jpeg", "webp"]},
+        {"name": "background", "type": "string", "enum": ["opaque", "transparent", "auto"]}
+      ],
+      "conversation_id": "none",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-image/image-generator/image-generator-tag"
+    },
+    {
+      "type": "IMAGE_EDITOR",
+      "category": "image",
+      "title": "Image editor",
+      "description": "Edit an existing image (asset key from POST /v1/files) following an instruction.",
+      "models": ["gpt-image-2"],
+      "fields": [
+        {"name": "imageUrl", "type": "string", "required": true, "description": "Asset key of the source image."},
+        {"name": "prompt", "type": "string", "required": true, "description": "Edit instruction."},
+        {"name": "quality", "type": "string", "enum": ["low", "medium", "high"]}
+      ],
+      "conversation_id": "none",
+      "long_running": true,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-feature-api"
+    },
+    {
+      "type": "IMAGE_VARIATOR",
+      "category": "image",
+      "title": "Image variations",
+      "description": "Create variations of an existing image.",
+      "models": ["magic-art", "clipdrop", "ideogram", "recraft"],
+      "fields": [
+        {"name": "imageUrl", "type": "string", "required": true, "description": "Asset key of the source image."},
+        {"name": "mode", "type": "string", "enum": ["fast", "relax"], "description": "Magic Art speed/cost mode."},
+        {"name": "n", "type": "integer"},
+        {"name": "aspect_width", "type": "integer"},
+        {"name": "aspect_height", "type": "integer"}
+      ],
+      "conversation_id": "none",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-image/image-variator/image-variator-tag"
+    },
+    {
+      "type": "IMAGE_TO_PROMPT",
+      "category": "image",
+      "title": "Image to prompt",
+      "description": "Describe an image as a text prompt.",
+      "models": ["magic-art", "ideogram"],
+      "fields": [
+        {"name": "imageUrl", "type": "string", "required": true, "description": "Asset key of the image."},
+        {"name": "mode", "type": "string", "enum": ["describe"], "description": "Required by Magic Art."},
+        {"name": "n", "type": "integer", "description": "Number of descriptions (1-10)."}
+      ],
+      "conversation_id": "none",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-image/image-to-prompt/image-to-prompt-tag"
+    },
+    {
+      "type": "IMAGE_UPSCALER",
+      "category": "image",
+      "title": "Image upscaler",
+      "description": "Increase the resolution of an image.",
+      "models": ["stable-image", "dzine", "ideogram", "recraft"],
+      "fields": [
+        {"name": "imageUrl", "type": "string", "required": true, "description": "Asset key of the image."},
+        {"name": "output_format", "type": "string", "enum": ["png", "jpeg", "webp"]}
+      ],
+      "conversation_id": "none",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-image/image-upscaler/image-upscaler-tag"
+    },
+    {
+      "type": "BACKGROUND_REMOVER",
+      "category": "image",
+      "title": "Background remover",
+      "description": "Remove the background of an image.",
+      "models": ["clipdrop", "recraft", "stable-image"],
+      "fields": [
+        {"name": "imageUrl", "type": "string", "required": true, "description": "Asset key of the image."}
+      ],
+      "conversation_id": "none",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-image/background-remover/background-remover-tag"
+    },
+    {
+      "type": "TEXT_TO_SPEECH",
+      "category": "audio",
+      "title": "Text to speech",
+      "description": "Synthesize speech. OpenAI models (tts-1, tts-1-hd) use `voice`; ElevenLabs (elevenlabs-tts) uses `voice_id`.",
+      "models": ["tts-1", "tts-1-hd", "elevenlabs-tts"],
+      "fields": [
+        {"name": "text", "type": "string", "required": true, "description": "Text to speak (max 4096 characters for OpenAI models)."},
+        {"name": "voice", "type": "string", "enum": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"], "description": "OpenAI voices."},
+        {"name": "voice_id", "type": "string", "description": "ElevenLabs voice id."},
+        {"name": "response_format", "type": "string", "enum": ["mp3", "opus", "aac", "flac", "wav", "pcm"]},
+        {"name": "speed", "type": "number", "description": "0.25 to 4.0."}
+      ],
+      "conversation_id": "type",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-audio/text-to-speech/openai"
+    },
+    {
+      "type": "SPEECH_TO_TEXT",
+      "category": "audio",
+      "title": "Speech to text",
+      "description": "Transcribe an uploaded audio file (asset key from POST /v1/files).",
+      "models": ["whisper-1"],
+      "fields": [
+        {"name": "audioUrl", "type": "string", "required": true, "description": "Asset key of the audio file."},
+        {"name": "response_format", "type": "string", "enum": ["text", "json", "srt", "verbose_json", "vtt"]},
+        {"name": "language", "type": "string", "description": "ISO 639-1 code; auto-detected when omitted."},
+        {"name": "prompt", "type": "string"},
+        {"name": "temperature", "type": "number"}
+      ],
+      "conversation_id": "none",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-audio/speech-to-text/whisper-1-speech-to-text"
+    },
+    {
+      "type": "MUSIC_GENERATOR",
+      "category": "audio",
+      "title": "Music generator",
+      "description": "Generate music from a prompt.",
+      "models": ["elevenlabs-music-v1"],
+      "fields": [
+        {"name": "mode", "type": "string", "required": true, "description": "Generation mode, e.g. prompt."},
+        {"name": "prompt", "type": "string", "description": "Music description (prompt mode)."},
+        {"name": "music_length_ms", "type": "integer", "description": "3000-600000 (prompt mode)."},
+        {"name": "output_format", "type": "string", "default": "mp3_44100_128"},
+        {"name": "force_instrumental", "type": "boolean"}
+      ],
+      "conversation_id": "none",
+      "long_running": true,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-audio/music-generator/music-generator-tag"
+    },
+    {
+      "type": "TEXT_TO_VIDEO",
+      "category": "video",
+      "title": "Text to video",
+      "description": "Generate a video from a prompt. Long-running: use mode=async or wait.",
+      "models": ["kling"],
+      "fields": [
+        {"name": "prompt", "type": "string", "required": true},
+        {"name": "duration", "type": "integer", "required": true, "description": "Kling < 3.0: 5 or 10 seconds."},
+        {"name": "version", "type": "string", "required": true, "enum": ["1.0", "1.6", "2.0", "2.1-master", "2.5", "3.0", "3.0-omni"]},
+        {"name": "mode", "type": "string", "enum": ["std", "pro"]},
+        {"name": "aspect_ratio", "type": "string", "enum": ["16:9", "9:16", "1:1"]},
+        {"name": "negative_prompt", "type": "string"}
+      ],
+      "conversation_id": "type",
+      "long_running": true,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-video/text-to-video/text-to-video-tag"
+    },
+    {
+      "type": "YOUTUBE_SUMMARIZER",
+      "category": "video",
+      "title": "YouTube summarizer",
+      "description": "Summarize a YouTube video.",
+      "models": ["gpt-4o", "claude-haiku-4-5-20251001"],
+      "fields": [
+        {"name": "videoUrl", "type": "string", "required": true, "description": "Full YouTube URL."},
+        {"name": "language", "type": "string", "required": true, "description": "Output language, e.g. English."}
+      ],
+      "conversation_id": "type",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-video/youtube-summarizer/youtube-summarizer-tag"
+    },
+    {
+      "type": "YOUTUBE_TRANSCRIBER",
+      "category": "video",
+      "title": "YouTube transcriber",
+      "description": "Transcribe a YouTube video.",
+      "models": ["gpt-4o"],
+      "fields": [
+        {"name": "videoUrl", "type": "string", "required": true, "description": "Full YouTube URL."}
+      ],
+      "conversation_id": "type",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-video/youtube-transcriber/youtube-transcriber-tag"
+    },
+    {
+      "type": "CONTENT_TRANSLATOR",
+      "category": "writing",
+      "title": "Content translator",
+      "description": "Translate text with control over tone, domain and style.",
+      "models": ["gpt-4o"],
+      "fields": [
+        {"name": "prompt", "type": "string", "required": true, "description": "Text to translate."},
+        {"name": "originalLanguage", "type": "string", "required": true, "description": "Source language code, e.g. en."},
+        {"name": "targetLanguage", "type": "string", "required": true, "description": "Target language code, e.g. fr."},
+        {"name": "tone", "type": "string", "required": true, "description": "e.g. friendly."},
+        {"name": "domain", "type": "string", "required": true, "description": "e.g. Technology & Computing."},
+        {"name": "writingStyle", "type": "string", "required": true, "description": "e.g. Conversational."}
+      ],
+      "conversation_id": "type",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-writing/content-translator/content-translator-tag"
+    },
+    {
+      "type": "SUMMARIZER",
+      "category": "writing",
+      "title": "Content summarizer",
+      "description": "Summarize text as bullet points.",
+      "models": ["gpt-4o"],
+      "fields": [
+        {"name": "prompt", "type": "string", "required": true, "description": "Text to summarize."},
+        {"name": "tone", "type": "string", "required": true, "description": "e.g. informative."},
+        {"name": "numberOfBullet", "type": "integer", "required": true},
+        {"name": "numberOfWord", "type": "integer", "required": true, "description": "Words per bullet."}
+      ],
+      "conversation_id": "type",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-writing/content-summarizer/content-summarizer-tag"
+    },
+    {
+      "type": "REWRITER",
+      "category": "writing",
+      "title": "Rewriter",
+      "description": "Rewrite text in a given tone.",
+      "models": ["gpt-4o"],
+      "fields": [
+        {"name": "prompt", "type": "string", "required": true},
+        {"name": "tone", "type": "string", "required": true},
+        {"name": "numberOfWord", "type": "integer", "required": true}
+      ],
+      "conversation_id": "type",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-writing/rewriter/rewriter-tag"
+    },
+    {
+      "type": "GRAMMAR_CHECKER",
+      "category": "writing",
+      "title": "Grammar checker",
+      "description": "Correct spelling and grammar.",
+      "models": ["gpt-4o"],
+      "fields": [
+        {"name": "prompt", "type": "string", "required": true, "description": "Text to check."}
+      ],
+      "conversation_id": "type",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-writing/grammar-checker/grammar-checker-tag"
+    },
+    {
+      "type": "CODE_GENERATOR",
+      "category": "code",
+      "title": "Code generator",
+      "description": "Generate code from a description, optionally with web search.",
+      "models": ["gpt-4o"],
+      "fields": [
+        {"name": "prompt", "type": "string", "required": true},
+        {"name": "webSearch", "type": "boolean"},
+        {"name": "numOfSite", "type": "integer", "description": "1-10."},
+        {"name": "maxWord", "type": "integer", "description": "100-10000."}
+      ],
+      "conversation_id": "none",
+      "long_running": false,
+      "docs_url": "https://docs.1min.ai/docs/api/ai-for-code/code-generator/code-generator-tag"
+    }
+  ]
+}

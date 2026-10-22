@@ -3,7 +3,10 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: '1min-gateway'
+  - job_name: "1min-gateway"
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics_token  # same value as METRICS_TOKEN
     static_configs:
-      - targets: ['1min-gateway:5001']
-    metrics_path: '/metrics'
+      - targets: ["1min-gateway:5001"]

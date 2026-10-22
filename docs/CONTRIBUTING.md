@@ -33,7 +33,7 @@ Thank you for contributing to **1min-Gateway**! This guide covers our developmen
 
 ```bash
 # Clone the repository
-git clone https://github.com/BillelAttafi/1min-gateway.git
+git clone https://github.com/bidabil/1min-Getway.git
 cd 1min-gateway
 
 # Create virtual environment

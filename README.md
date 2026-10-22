@@ -1,189 +1,141 @@
+# 1min-Gateway
 
-# 1min-Gateway 🚀
+[![CI](https://github.com/bidabil/1min-Getway/actions/workflows/ci.yml/badge.svg)](https://github.com/bidabil/1min-Getway/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[![CI/CD](https://github.com/BillelAttafi/1min-gateway/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/BillelAttafi/1min-gateway/actions)
-[![Docker](https://img.shields.io/docker/v/billelattafi/1min-gateway?label=Docker%20Hub)](https://hub.docker.com/r/billelattafi/1min-gateway)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![semantic-release](https://img.shields.io/badge/semantic--release-gitmoji-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
+**Use [1min.ai](https://1min.ai) as the LLM of your AI agents.** 1min-Gateway exposes your
+1min.ai account through the APIs agents already speak:
 
-**The ultimate bridge to relay 1min.ai API into an OpenAI-compatible structure.**
+| Interface | Endpoints | Works with |
+|-----------|-----------|------------|
+| **OpenAI** | `/v1/chat/completions`, `/v1/models`, `/v1/images/*`, `/v1/audio/*`, `/v1/files` | OpenAI SDK, LangChain, CrewAI, AutoGen, LlamaIndex, n8n, Open WebUI… |
+| **Anthropic** | `/v1/messages`, `/v1/messages/count_tokens` | Anthropic SDK, agents written for Claude |
+| **MCP** | `/mcp` (streamable HTTP) | Claude Desktop/Code, Cursor, any MCP client |
+| **1min.ai features** | `/v1/features/{type}` | Every 1min.ai tool: video, music, writing, image tools, YouTube… |
 
-> Seamlessly integrate 1min.ai with any OpenAI-compatible client like TypingMind, bolt.diy, ChatBox, or LibreChat.
+Your 1min.ai key stays on the server. Each agent gets its own revocable gateway key.
 
-⭐ **Star this repository** if you find it useful!
-
-🌐 **Hosted version**: [kokodev.cc/1minrelay](https://www.kokodev.cc/1minrelay)
-
----
-
-## ✨ Features
-
-| Category | Features |
-|----------|----------|
-| **🔗 Compatibility** | OpenAI-standard API • Works with TypingMind, ChatBox, LibreChat, bolt.diy |
-| **🧠 Multimodal** | Vision (image analysis) • Documents (.pdf, .docx, .txt, .yaml) • Image generation (Flux, SDXL) |
-| **🚀 Performance** | Native streaming • Rate limiting (Memcached) • Precision tokenization (Tiktoken, Mistral) |
-| **🔒 Security** | Cosign-signed images • SBOM generation • Trivy vulnerability scanning |
-| **🌍 Platform** | Multi-arch builds (AMD64 + ARM64) • Docker-ready • Auto-updates via Watchtower |
-
----
-
-## 🏗 Architecture
+## How it works
 
 ```mermaid
-graph LR
-    A[AI Client] -->|OpenAI Format| B(1min-Gateway)
-    B -->|Translation| C[1min.ai API]
-    C -->|Response| B
-    B -->|Streaming| A
+flowchart LR
+    A[Agents<br/>OpenAI / Anthropic / MCP] -->|gateway key| G(1min-Gateway)
+    G -->|text, tools, JSON mode| N["1min.ai /openai/v1<br/>(native function calling)"]
+    G -->|images, files, web search,<br/>Claude / Gemini / Grok| L["1min.ai Chat with AI<br/>(tools emulated)"]
+    G -->|images, audio, video, writing| F["1min.ai AI Features"]
 ```
 
----
+* **Native first.** Requests go to 1min.ai's OpenAI-compatible API (real function calling,
+  streaming, `response_format`, reasoning models) whenever the model is listed there.
+* **Everything else** goes to the *Chat with AI* API: image and file input, web search, and
+  models such as Claude, Gemini or Grok. The gateway sends the whole conversation on every call
+  (stateless, like OpenAI) and emulates tool calls for these models.
+* **Model lists come from 1min.ai** (`/openai/v1/models` and the public catalog
+  `/models?feature=UNIFY_CHAT_WITH_AI`), cached for 10 minutes. Claude names used by agents
+  (`claude-haiku-4-5-20251001`) are mapped to 1min.ai's ids (`us.anthropic.claude-haiku-4-5-20251001-v1:0`).
+* **Sampling parameters** that a model rejects (e.g. `temperature` on reasoning models) are dropped,
+  and output limits are capped to the model maximum, so agent frameworks work with defaults.
 
-## 🚀 Quick Start
-
-### Automated Server Deployment (Recommended)
-
-One command on a fresh server:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/billelattafi/1min-gateway/main/deploy.sh | bash
-```
-
-Handles Docker installation, interactive `.env` setup, pulls the image from Docker Hub, and verifies health.
-
-### Docker Compose
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/billelattafi/1min-gateway.git
-cd 1min-gateway
-
-# Configure environment
 cp .env.example .env
-nano .env  # Add your 1min.ai API Key
-
-# Launch
-make up
+# 1. put your 1min.ai key in ONE_MIN_API_KEY
+# 2. create a key for each agent and add the printed entry to GATEWAY_API_KEYS
+docker compose run --rm gateway python -m gateway.cli create-key my-agent
+docker compose up -d
+curl http://127.0.0.1:5001/ready
 ```
 
-### Docker Run (minimal)
+Without Docker (Python 3.12+): `make install`, `make key NAME=my-agent`, `make dev`.
+
+On a fresh server: `curl -fsSL https://raw.githubusercontent.com/bidabil/1min-Getway/main/deploy.sh | bash`.
+The gateway listens on `127.0.0.1` only: put a TLS reverse proxy (Caddy, Traefik, nginx) in front of
+it before exposing it to other machines.
+
+## Connect your agents
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:5001/v1", api_key="gw-...", max_retries=0)
+reply = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello"}],
+)
+```
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(base_url="http://127.0.0.1:5001", api_key="gw-...", max_retries=0)
+message = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello"}],
+)
+```
+
+MCP clients: URL `http://127.0.0.1:5001/mcp`, header `Authorization: Bearer gw-...`.
+
+> Set `max_retries=0`: 1min.ai bills every generation, and a retried POST is a new generation.
+
+Model names: `GET /v1/models` lists native models, the *Chat with AI* models and your aliases
+(field `vision`: whether the model accepts images).
+Map the names your agents send with `MODEL_ALIASES`, e.g. `claude-*=gpt-5.1` to run a Claude-based
+agent on a native model with real function calling. Append `:online` to a model name
+(`gpt-4o-mini:online`) to enable 1min.ai web search.
+
+See [docs/API_PARAMETERS.md](docs/API_PARAMETERS.md) for every endpoint and parameter, and
+[docs/GUIDE-AGENTS-FR.md](docs/GUIDE-AGENTS-FR.md) for a French setup guide with agent examples.
+
+## Configuration
+
+All settings are environment variables (see [.env.example](.env.example)). The essentials:
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `ONE_MIN_API_KEY` | Your 1min.ai API key (**required**) | – |
+| `GATEWAY_API_KEYS` | Agent keys as `name:sha256[:rpm]` (**required**) | – |
+| `RATE_LIMIT_RPM` | Requests per minute per agent key (0 = off) | `60` |
+| `MODEL_ALIASES` | `client-model=1min-model` mappings, wildcards allowed | – |
+| `LEGACY_CHAT_MODELS` | Extra Chat with AI model ids, in addition to 1min.ai's catalog | – |
+| `METRICS_TOKEN` | Enables `/metrics` (Prometheus, Bearer token) | disabled |
+| `MCP_ENABLED` / `MCP_ALLOWED_HOSTS` | MCP server and its allowed host names | `true` / – |
+| `DOCS_ENABLED` | Serve `/docs` (OpenAPI UI) | `false` |
+
+## Security
+
+* Agents authenticate with gateway keys; only their SHA-256 digests are configured.
+* Every endpoint except `/health`, `/ready`, `/v1/version` and `/` requires a key; `/metrics` needs `METRICS_TOKEN`.
+* The gateway never downloads URLs supplied by clients: image URLs are passed to 1min.ai, inline
+  images are uploaded through the 1min.ai Asset API. Only result files returned by 1min.ai are
+  downloaded (HTTPS, no redirects, public addresses only, size-capped).
+* Logs are JSON and never contain prompts, completions or keys.
+* The container runs as a non-root user with a read-only filesystem and no capabilities.
+
+## Limitations
+
+* 1min.ai's OpenAI-compatible API is text-only, limited to 200 messages / 100,000 characters per
+  request and 60 requests per minute per account. Image/file input therefore uses the Chat with AI
+  API, where tool calls are emulated (reliable with strong models, not guaranteed).
+* Token usage for the Chat with AI API is estimated (characters / 4).
+* 1min.ai returns one signed URL per generated image set: with `n > 1` the other images are
+  returned as asset keys.
+* Rate limits and caches are in memory: each worker or replica keeps its own.
+* Embeddings and the OpenAI Responses API are not offered by 1min.ai and are not emulated.
+
+## Development
 
 ```bash
-docker run -d --name 1min-gateway \
-  --restart unless-stopped \
-  -p 5001:5001 \
-  --env-file .env \
-  billelattafi/1min-gateway:latest
+make install     # dependencies (requirements-dev.txt)
+make check       # ruff + mypy --strict + tests with coverage
 ```
 
-### Local Development
+Architecture (hexagonal): `src/gateway/domain` (models and pure rules), `application` (use cases and
+ports), `infrastructure` (1min.ai adapters, security, observability), `interfaces` (HTTP APIs, MCP).
+Tests run hermetically against an in-memory fake of 1min.ai.
 
-```bash
-# Install dependencies
-make install
+## License
 
-# Run tests
-make test
-
-# Start development server
-make dev
-```
-
----
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ONE_MIN_AI_API_KEY` | **Required** - Your 1min.ai API key | - |
-| `PERMIT_MODELS_FROM_SUBSET_ONLY` | Restrict to specific models | `False` |
-| `SUBSET_OF_ONE_MIN_PERMITTED_MODELS` | Allowed models list | All |
-| `RATELIMIT_ENABLED` | Enable request throttling | `True` |
-| `LOG_LEVEL` | Logging verbosity | `INFO` |
-| `DEBUG` | Debug mode | `False` |
-
-See [`.env.example`](.env.example) for complete configuration options.
-
----
-
-## 📖 Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Contributing Guide](docs/CONTRIBUTING.md) | Development workflow and commit standards |
-| [CI/CD Documentation](docs/CI-CD-DOCUMENTATION.md) | Pipeline architecture and configuration |
-| [CI/CD Cheatsheet](docs/CI-CD-CHEATSHEET.md) | Quick reference for releases |
-| [Dependabot Guide](docs/DEPENDABOT-DOCUMENTATION.md) | Automated dependency updates |
-| [Docker & Environment](docs/ENV-DOCKER-GUIDE.md) | Container configuration |
-| [API Parameters](docs/API_PARAMETERS.md) | Supported API parameters |
-
----
-
-## 🛠 Development
-
-### Prerequisites
-
-- Python 3.12+
-- Docker & Docker Compose
-- Node.js 18+ (for commit hooks)
-
-### Makefile Commands
-
-```bash
-make install      # Install dependencies and hooks
-make dev          # Start development server
-make test         # Run tests with coverage
-make lint         # Check code quality (Ruff)
-make format       # Format code (Ruff)
-make up           # Docker Compose up
-make down         # Docker Compose down
-make clean        # Clean build artifacts
-```
-
-### Commit Convention
-
-We use **Gitmoji + Conventional Commits**:
-
-```bash
-:sparkles: feat(Core): add new feature
-:bug: fix(Gateway): resolve streaming issue
-:memo: docs(Config): update configuration guide
-```
-
-See [gitmoji.dev](https://gitmoji.dev) for emoji codes.
-
----
-
-## 💎 Support
-
-Support the project:
-- [GitHub Sponsors](https://github.com/sponsors/BillelAttafi)
-- [Ko-fi](https://ko-fi.com/billelattafi)
-- [Buy Me a Coffee](https://buymeacoffee.com/billel)
-
-### Hosted Version Benefits
-
-- Turnkey hosting (no server setup)
-- Beta access to new features
-- Priority support on [Discord](https://discord.gg/GQd3DrxXyj)
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our [Contributing Guide](docs/CONTRIBUTING.md) for details on:
-
-- Development setup
-- Commit message format
-- Pull request process
-
----
-
-## 📜 License
-
-MIT License - Copyright (c) 2026 Billel Attafi
-
-See [LICENSE](LICENSE) for details.
+MIT – Copyright (c) 2026 Billel Attafi

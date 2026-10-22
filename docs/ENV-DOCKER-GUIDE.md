@@ -1,3 +1,6 @@
+> **Outdated (1min-Gateway 1.x).** This document describes the code replaced by the 2.0 rewrite.
+> See [README.md](../README.md), [API_PARAMETERS.md](API_PARAMETERS.md) and [GUIDE-AGENTS-FR.md](GUIDE-AGENTS-FR.md).
+
 
 # 🐳 Environment & Docker Guide
 

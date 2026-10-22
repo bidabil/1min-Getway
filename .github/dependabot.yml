@@ -21,7 +21,7 @@ updates:
       - "dependencies"
       - "python"
     reviewers:
-      - "billelattafi"
+      - "bidabil"
     commit-message:
       prefix: "chore"
       prefix-development: "chore"
@@ -86,7 +86,7 @@ updates:
       - "github-actions"
       - "ci-cd"
     reviewers:
-      - "billelattafi"
+      - "bidabil"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -138,7 +138,7 @@ updates:
       - "dependencies"
       - "docker"
     reviewers:
-      - "billelattafi"
+      - "bidabil"
     commit-message:
       prefix: "chore"
       include: "scope"
