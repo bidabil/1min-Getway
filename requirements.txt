@@ -11,3 +11,5 @@ httpx==0.28.1
 python-multipart==0.0.32
 mcp==2.3.0
 prometheus-client==0.26.0
+# Transitive (httpx); floor for PYSEC-2026-4320
+certifi>=2026.10.19
