@@ -5,6 +5,7 @@
 {"success": false, "error": {"code", "message", "details"}}.
 """
 
+import re
 from typing import Any
 
 import httpx
@@ -21,6 +22,9 @@ from ...domain.errors import (
 )
 
 _MAX_MESSAGE = 500
+# The OpenAI-compatible API caps messages + tools + response_format at 100,000 characters.
+# Agents compress their history on OpenAI's `context_length_exceeded`, so report it as such.
+_SIZE_LIMIT = re.compile(r"character limit|<=\s*\d+ characters", re.IGNORECASE)
 
 
 def raise_for_upstream_status(response: httpx.Response) -> None:
@@ -33,6 +37,13 @@ def upstream_error(response: httpx.Response) -> GatewayError:
     status = response.status_code
     message, code, param = _extract(response)
     request_id = response.headers.get("x-request-id")
+    if status in (400, 422) and message and _SIZE_LIMIT.search(message):
+        return InvalidRequestError(
+            f"This request exceeds the maximum context length: {message}",
+            code="context_length_exceeded",
+            param=param,
+            upstream_request_id=request_id,
+        )
     if status in (400, 422):
         return InvalidRequestError(
             message or "1min.ai rejected the request.",

@@ -102,6 +102,24 @@ class TestUpstreamErrors:
                 "PROMPT_OBJECT_VALIDATION_FAILED",
             ),
             (
+                400,
+                {
+                    "error": {
+                        "message": "Messages, tools and response format exceed the 100,000"
+                        " character limit.",
+                        "type": "invalid_request_error",
+                    }
+                },
+                ErrorKind.INVALID_REQUEST,
+                "context_length_exceeded",
+            ),
+            (
+                400,
+                {"error": {"message": "Too big: expected string to have <=100000 characters"}},
+                ErrorKind.INVALID_REQUEST,
+                "context_length_exceeded",
+            ),
+            (
                 401,
                 {"error": {"message": "bad key"}},
                 ErrorKind.UPSTREAM,
