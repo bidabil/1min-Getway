@@ -72,7 +72,7 @@ jobs:
 
       - name: Semantic Release
         id: semantic
-        uses: cycjimmy/semantic-release-action@v6
+        uses: cycjimmy/semantic-release-action@v8
         with:
           # Pinned: an unpinned "latest" pulled an incompatible preset once. Bump deliberately.
           semantic_version: 25.0.9
