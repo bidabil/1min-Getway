@@ -1,5 +1,5 @@
 # --- STAGE 1: dependencies ---
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /build
 COPY requirements.txt .
@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
 # --- STAGE 2: runtime ---
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ARG VERSION="0.0.0"
 ARG COMMIT="unknown"
@@ -34,12 +34,14 @@ COPY --from=builder /install /usr/local
 # Code is owned by root and read-only for the runtime user.
 COPY src/ /app/src/
 
-USER appuser
+# Numeric UID (appuser) so the host and orchestrators can resolve it.
+USER 1000
 WORKDIR /app
 EXPOSE 5001
 
+# An uncaught exception exits with status 1, which marks the container unhealthy.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"5001\")}/health', timeout=4)" || exit 1
+    CMD ["python", "-c", "import os, urllib.request; port = os.environ.get('PORT', '5001'); urllib.request.urlopen('http://127.0.0.1:' + port + '/health', timeout=4)"]
 
 # `exec` makes uvicorn PID 1 so it receives SIGTERM and shuts down gracefully.
 # FORWARDED_ALLOW_IPS lists the reverse proxies whose X-Forwarded-* headers are trusted.

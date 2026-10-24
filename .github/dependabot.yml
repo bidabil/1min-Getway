@@ -29,41 +29,32 @@ updates:
 
     # Groupes SANS chevauchement
     groups:
-      # Dépendances de production
+      # Dépendances de production (requirements.txt de la v2)
       production-core:
         patterns:
-          - "flask*"
-          - "waitress*"
-          - "requests*"
+          - "fastapi"
+          - "starlette"
+          - "uvicorn"
           - "pydantic*"
+          - "httpx"
+          - "python-multipart"
+          - "mcp"
+          - "prometheus-client"
+          - "certifi"
         update-types:
           - "minor"
           - "patch"
 
-      # Tokenization
-      tokenization:
-        patterns:
-          - "tiktoken*"
-          - "mistral*"
-        update-types:
-          - "minor"
-          - "patch"
-
-      # Outils de développement
+      # Outils de développement (requirements-dev.txt)
       dev-tools:
         patterns:
           - "pytest*"
           - "ruff"
-          - "pre-commit"
+          - "mypy"
+          - "pygments"
         update-types:
           - "minor"
           - "patch"
-
-    ignore:
-      - dependency-name: "flask"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "tiktoken"
-        update-types: ["version-update:semver-major"]
 
     # versioning-strategy non définie → comportement par défaut "auto".
     # "increase" était utilisé mais élargit les contraintes de version sans lockfile
