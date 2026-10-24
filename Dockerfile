@@ -1,75 +1,46 @@
-
-# --- STAGE 1: Builder ---
+# --- STAGE 1: dependencies ---
 FROM python:3.12-slim AS builder
 
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
+WORKDIR /build
 COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
-# --- STAGE 2: Runtime (Image finale) ---
+# --- STAGE 2: runtime ---
 FROM python:3.12-slim
 
-# Build args injected by ci-build.yml (VERSION, COMMIT)
 ARG VERSION="0.0.0"
 ARG COMMIT="unknown"
 
-# Labels OCI standards
 LABEL org.opencontainers.image.title="1min-Gateway"
-LABEL org.opencontainers.image.description="Intelligent API Gateway for AI models (FastAPI)"
-LABEL org.opencontainers.image.vendor="Billel Attafi"
-LABEL org.opencontainers.image.source="https://github.com/billelattafi/1min-gateway"
+LABEL org.opencontainers.image.description="OpenAI- and Anthropic-compatible gateway and MCP server for 1min.ai"
+LABEL org.opencontainers.image.source="https://github.com/bidabil/1min-Getway"
+LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${COMMIT}"
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PATH=/home/appuser/.local/bin:$PATH
-ENV APP_VERSION="${VERSION}"
-ENV APP_COMMIT="${COMMIT}"
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src \
+    APP_COMMIT="${COMMIT}" \
+    PORT=5001 \
+    WORKERS=1
 
-WORKDIR /app
+# pip is not needed at runtime; removing it also removes its CVEs from the image.
+RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin appuser \
+    && python -m pip uninstall --yes pip
 
-# Security updates for base image vulnerabilities
-# Pending CVEs (no fix available yet in Debian):
-# - CVE-2026-0861 (glibc): HIGH - memalign integer overflow. Low risk (no direct memalign usage)
-# - CVE-2026-0915 (glibc): MEDIUM - getnetbyaddr stack leak. Low risk (no getnetbyaddr usage)
-# - CVE-2025-15281 (glibc): MEDIUM - wordexp uninitialized memory. Low risk (no wordexp usage)
-# - CVE-2026-27171 (zlib): MEDIUM - CRC32 infinite loop DoS. Low risk (no CRC32 combine usage)
-# - CVE-2025-14104 (util-linux): MEDIUM - setpwnam heap overread. Low risk (no SUID login-utils)
-# - CVE-2025-7709 (sqlite3): MEDIUM - FTS5 integer overflow. Low risk (no FTS5 usage)
-# This upgrade ensures we get security patches as soon as they're released.
-RUN apt-get update && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /install /usr/local
+# Code is owned by root and read-only for the runtime user.
+COPY src/ /app/src/
 
-# Upgrade pip (CVE-2025-8869) and create non-root user
-RUN pip install --no-cache-dir --upgrade "pip>=25.3" \
-    && useradd --create-home --shell /bin/bash appuser
-
-# Copier les dépendances depuis le builder
-COPY --from=builder /root/.local /home/appuser/.local
-
-# Copier le code source avec les bonnes permissions
-COPY --chown=appuser:appuser . .
-
-# Créer le dossier de logs avec permissions pour les volumes montés
-# Utilise 777 pour permettre l'écriture même si le volume est monté avec différents UID
-RUN mkdir -p logs && chmod 777 logs
-
-# Passer à l'utilisateur non-root
 USER appuser
-
-# Healthcheck intégré (FastAPI)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:5001/', timeout=5)" || exit 1
-
+WORKDIR /app
 EXPOSE 5001
 
-# Utiliser uvicorn pour FastAPI
-# PORT et WORKERS sont configurables via variables d'environnement
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-5001} --workers ${WORKERS:-1}"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"5001\")}/health', timeout=4)" || exit 1
+
+# `exec` makes uvicorn PID 1 so it receives SIGTERM and shuts down gracefully.
+# FORWARDED_ALLOW_IPS lists the reverse proxies whose X-Forwarded-* headers are trusted.
+CMD ["sh", "-c", "exec uvicorn gateway.main:app --host 0.0.0.0 --port \"$PORT\" --workers \"$WORKERS\" --proxy-headers --no-access-log --timeout-graceful-shutdown 30"]

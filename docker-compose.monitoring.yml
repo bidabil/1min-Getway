@@ -1,29 +1,28 @@
+# Optional Prometheus + Grafana. Requires METRICS_TOKEN in .env (same value in
+# monitoring/metrics_token, which Prometheus uses to authenticate the scrape).
+# Start the gateway first: docker compose up -d && make monitoring-up
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.5.0
     container_name: prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/metrics_token:/etc/prometheus/metrics_token:ro
       - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
     restart: unless-stopped
     networks:
-      - gateway-network
+      - gateway
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.1.1
     container_name: grafana
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-changeme}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?set GRAFANA_PASSWORD in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -31,13 +30,13 @@ services:
       - prometheus
     restart: unless-stopped
     networks:
-      - gateway-network
+      - gateway
 
 volumes:
   prometheus_data:
   grafana_data:
 
 networks:
-  gateway-network:
+  gateway:
     external: true
-    name: 1min-getway_gateway-network
+    name: 1min-gateway-network

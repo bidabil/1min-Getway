@@ -28,7 +28,7 @@ concurrency:
 
 env:
   REGISTRY_GHCR: ghcr.io
-  GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway
+  GHCR_IMAGE: ${{ github.repository_owner }}/1min-gateway  # owner must be lowercase (OCI)
   PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
   STAGING_URL: ${{ vars.STAGING_URL }}
 
@@ -105,16 +105,18 @@ jobs:
         run: |
           # Toujours déployer par digest immutable — jamais par tag mutable (y compris :latest)
           # Un tag peut être réécrit ; un digest @sha256: est garanti immuable.
+          # OCI repository names must be lowercase (the owner login may contain capitals).
+          IMAGE_BASE="${IMAGE_BASE,,}"
           IMAGE_TAG="${IMAGE_BASE}:${VERSION}"
 
-          if ! docker manifest inspect "$IMAGE_TAG" > /dev/null 2>&1; then
+          if ! docker buildx imagetools inspect "$IMAGE_TAG" > /dev/null 2>&1; then
             echo "Image not found: $IMAGE_TAG" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
 
-          DIGEST=$(docker manifest inspect "$IMAGE_TAG" --verbose 2>/dev/null \
-            | jq -r 'if type == "array" then .[0].Descriptor.digest else .Descriptor.digest end' \
-            || echo "")
+          # Digest of the multi-arch index: this is what ci-build signs with cosign.
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE_TAG" --format '{{json .Manifest}}' \
+            | jq -r '.digest' || echo "")
 
           if [[ -z "$DIGEST" || "$DIGEST" == "null" ]]; then
             echo "::error::Could not resolve digest for $IMAGE_TAG"
@@ -215,7 +217,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4.1.1
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Verify Image Signature
         env:
@@ -252,27 +254,23 @@ jobs:
             echo "=== Deploying 1min-Gateway v${VERSION} ==="
             echo "Image: ${IMAGE_REF}"
 
-            # Pull the new image
+            # Pull the verified image by digest before touching the running container
             docker pull "${IMAGE_REF}"
 
-            # Tag it as latest locally for docker compose
-            docker tag "${IMAGE_REF}" "billelattafi/1min-gateway:latest"
-
-            # Graceful restart: stop old container, start new one
             if [ -f "${DEPLOY_DIR}/docker-compose.yml" ]; then
               cd "${DEPLOY_DIR}"
-              docker compose pull 1min-gateway
-              docker compose up -d --no-deps --force-recreate 1min-gateway
+              # Run exactly the verified digest (no re-pull of a mutable tag)
+              GATEWAY_IMAGE="${IMAGE_REF}" docker compose up -d --no-deps --no-build --pull never --force-recreate gateway
             else
-              # Fallback: plain docker run
-              docker stop "${CONTAINER_NAME}" 2>/dev/null || true
-              docker rm   "${CONTAINER_NAME}" 2>/dev/null || true
+              # Fallback: plain docker run (same layout as deploy.sh)
+              docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
               docker run -d \
                 --name "${CONTAINER_NAME}" \
                 --restart unless-stopped \
-                -p 5001:5001 \
+                -p 127.0.0.1:5001:5001 \
                 --env-file "${DEPLOY_DIR}/.env" \
-                -v "${DEPLOY_DIR}/logs:/app/logs" \
+                --read-only --tmpfs /tmp \
+                --cap-drop ALL --security-opt no-new-privileges:true \
                 "${IMAGE_REF}"
             fi
 
@@ -409,9 +407,11 @@ jobs:
           PASSED=0
           TOTAL=3
 
-          [[ "${{ steps.health.outputs.health_ok }}" == "true" ]] && ((PASSED++))
-          [[ "${{ steps.ready.outputs.ready_ok }}" == "true" ]] && ((PASSED++))
-          [[ "${{ steps.version.outputs.version_ok }}" == "true" ]] && ((PASSED++))
+          # PASSED=$((PASSED+1)) instead of ((PASSED++)): the latter returns 1 when PASSED is 0,
+          # which aborts the step under bash -e.
+          if [[ "${{ steps.health.outputs.health_ok }}" == "true" ]]; then PASSED=$((PASSED+1)); fi
+          if [[ "${{ steps.ready.outputs.ready_ok }}" == "true" ]]; then PASSED=$((PASSED+1)); fi
+          if [[ "${{ steps.version.outputs.version_ok }}" == "true" ]]; then PASSED=$((PASSED+1)); fi
 
           echo "Smoke tests passed: $PASSED/$TOTAL" >> $GITHUB_STEP_SUMMARY
 

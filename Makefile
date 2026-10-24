@@ -1,70 +1,65 @@
-
 # ============================================================
-# Makefile - 1min-Gateway (Optimisé)
+# Makefile - 1min-Gateway
 # ============================================================
 
-PYTHON := python3
-IMAGE := billelattafi/1min-gateway
+PYTHON ?= python3
+IMAGE  ?= billelattafi/1min-gateway
+export PYTHONPATH := src
 
-.PHONY: help install dev test lint format security check clean up down logs
+.PHONY: help install dev test test-cov lint format typecheck check key build up down logs \
+        monitoring-up monitoring-down clean
 
-help: ## 📖 Affiche cette aide
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[32m%-15s\033[0m %s\n", $$1, $$2}'
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[32m%-16s\033[0m %s\n", $$1, $$2}'
 
-# --- SETUP ---
-install: ## 🔧 Installation complète
-	pip install -r requirements.txt
-	pip install ruff pre-commit
-	pre-commit install --hook-type commit-msg --hook-type pre-commit
+install: ## Install runtime and development dependencies
+	$(PYTHON) -m pip install -r requirements-dev.txt
 
-# --- DÉVELOPPEMENT ---
-dev: ## 🚀 Lance l'application
-	$(PYTHON) main.py
+dev: ## Run the gateway locally (reads .env)
+	$(PYTHON) -m gateway
 
-# --- QUALITÉ ---
-test: ## ✅ Lance les tests
-	pytest tests/ -v
+key: ## Create a gateway API key: make key NAME=my-agent
+	$(PYTHON) -m gateway.cli create-key $(or $(NAME),agent)
 
-test-cov: ## 📊 Tests avec coverage
-	pytest tests/ -v --cov=src --cov-report=html --cov-fail-under=75
+test: ## Run the tests
+	$(PYTHON) -m pytest
 
-lint: ## 🔍 Vérifie le code (Ruff)
-	ruff check .
+test-cov: ## Run the tests with coverage
+	$(PYTHON) -m pytest --cov=src/gateway --cov-report=term-missing
 
-format: ## 🎨 Formate le code (Ruff)
-	ruff format .
-	ruff check --fix .
+lint: ## Lint and check formatting
+	$(PYTHON) -m ruff check .
+	$(PYTHON) -m ruff format --check .
 
-security: ## 🔒 Scan de sécurité
-	ruff check --select S .
+format: ## Format the code
+	$(PYTHON) -m ruff format .
+	$(PYTHON) -m ruff check --fix .
 
-check: lint test ## ✅ Lint + Tests
+typecheck: ## Static type checking (strict)
+	$(PYTHON) -m mypy src
 
-# --- DOCKER ---
-deploy: ## 🚀 Déploie sur un serveur distant (depuis le serveur)
-	bash deploy.sh
+check: lint typecheck test-cov ## Everything CI runs
 
-monitoring-up: ## 📊 Lance Prometheus + Grafana
-	docker compose -f docker-compose.monitoring.yml up -d
-
-monitoring-down: ## ⏹️ Arrête Prometheus + Grafana
-	docker compose -f docker-compose.monitoring.yml down
-
-build: ## 🐳 Build l'image
+build: ## Build the Docker image
 	docker build -t $(IMAGE):latest .
 
-up: ## 🚀 Lance l'infrastructure
+up: ## Start with Docker Compose
 	docker compose up -d
 
-down: ## ⏹️ Arrête l'infrastructure
+down: ## Stop Docker Compose
 	docker compose down
 
-logs: ## 📜 Affiche les logs
-	docker compose logs -f 1min-gateway
+logs: ## Follow the gateway logs
+	docker compose logs -f gateway
 
-# --- NETTOYAGE ---
-clean: ## 🧹 Nettoie les caches
+monitoring-up: ## Start Prometheus and Grafana
+	docker compose -f docker-compose.monitoring.yml up -d
+
+monitoring-down: ## Stop Prometheus and Grafana
+	docker compose -f docker-compose.monitoring.yml down
+
+clean: ## Remove caches
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf .pytest_cache .ruff_cache .coverage htmlcov/
+	rm -rf .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov/
 
 .DEFAULT_GOAL := help

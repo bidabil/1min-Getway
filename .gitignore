@@ -6,17 +6,21 @@
 # ============================================================
 
 # --- SECRETS & CONFIGURATION (CRITIQUE) ---
+# (git does not support comments at the end of a pattern line)
 .env
 .env.*
 *.env
-!.env.example      # Garder le template
-!.env.local        # Garder le template dev
+!.env.example
 auth.json
 *.key
 *.pem
 *.p12
 secrets.yml
 credentials.json
+monitoring/metrics_token
+
+# Local Claude Code settings (machine-specific permissions)
+.claude/
 
 # Baseline de detect-secrets
 .secrets.baseline
