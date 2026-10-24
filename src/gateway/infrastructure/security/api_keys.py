@@ -23,6 +23,8 @@ def generate_key() -> str:
 
 
 def hash_key(key: str) -> str:
+    # Keys are 256-bit random tokens, not passwords: brute force is infeasible, so a fast
+    # hash is appropriate (a slow KDF would only add latency to every request).
     return hashlib.sha256(key.strip().encode("utf-8")).hexdigest()
 
 

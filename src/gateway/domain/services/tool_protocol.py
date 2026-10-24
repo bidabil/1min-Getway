@@ -31,13 +31,17 @@ def render_tool_instructions(
 
     lines = [
         "# Tools",
-        "You can call the tools listed below. To call tools, reply with ONLY one block per call, "
-        "in exactly this format and with no other text:",
+        (
+            "You can call the tools listed below. To call tools, reply with ONLY one block per "
+            "call, in exactly this format and with no other text:"
+        ),
         f'{OPEN_TAG}{{"name": "<tool name>", "arguments": {{<JSON object matching the tool parameters>}}}}{CLOSE_TAG}',
-        "After your tool call blocks, STOP: never write tool results or an answer based on "
-        "guessed results. The real results are given back to you in the next turn as "
-        "<tool_result> entries; then use them to answer. Do not call the same tool again with "
-        "the same arguments. If no tool is needed, answer normally.",
+        (
+            "After your tool call blocks, STOP: never write tool results or an answer based on "
+            "guessed results. The real results are given back to you in the next turn as "
+            "<tool_result> entries; then use them to answer. Do not call the same tool again "
+            "with the same arguments. If no tool is needed, answer normally."
+        ),
     ]
     if tool_choice == "required":
         lines.append("You MUST call at least one tool in this reply.")

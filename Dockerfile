@@ -26,7 +26,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=5001 \
     WORKERS=1
 
-RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin appuser
+# pip is not needed at runtime; removing it also removes its CVEs from the image.
+RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin appuser \n    && python -m pip uninstall --yes pip
 
 COPY --from=builder /install /usr/local
 # Code is owned by root and read-only for the runtime user.
