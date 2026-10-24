@@ -56,14 +56,26 @@ jobs:
     needs: guard
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Writes use the release GitHub App token below; GITHUB_TOKEN only reads.
     permissions:
-      contents: write
-      issues: write
-      pull-requests: write
+      contents: read
     outputs:
       new_release_published: ${{ steps.semantic.outputs.new_release_published }}
       new_release_version: ${{ steps.semantic.outputs.new_release_version }}
     steps:
+      # The release App (variable RELEASE_APP_CLIENT_ID, secret RELEASE_APP_PRIVATE_KEY) is the
+      # only bypass actor of the main ruleset: it pushes the CHANGELOG commit and the tag.
+      # Unlike GITHUB_TOKEN pushes, its tag push triggers CI, which builds the versioned image.
+      - name: Release token (GitHub App)
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+
       - name: Checkout
         uses: actions/checkout@v7
         with:
@@ -82,7 +94,7 @@ jobs:
             @semantic-release/changelog@7.0.0
             @semantic-release/git@11.0.1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Release Summary
         if: steps.semantic.outputs.new_release_published == 'true'
