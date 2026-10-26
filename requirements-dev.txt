@@ -5,4 +5,4 @@ pytest-cov==7.1.0
 ruff==0.17.2
 mypy==2.4.0
 # Transitive (pytest); floor for PYSEC-2023-117 and PYSEC-2026-2987
-pygments>=2.20.0
+pygments>=2.21.0
