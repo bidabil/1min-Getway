@@ -2,10 +2,10 @@
 # requirements.txt - runtime dependencies (exact pins)
 # Regenerate deliberately; Dependabot proposes updates.
 # ============================================================
-fastapi==0.156.1
+fastapi==0.161.1
 starlette==1.9.0
-uvicorn[standard]==0.46.0
-pydantic==2.13.3
+uvicorn[standard]==0.54.0
+pydantic==2.14.1
 pydantic-settings==2.16.1
 httpx==0.28.1
 python-multipart==0.0.32
